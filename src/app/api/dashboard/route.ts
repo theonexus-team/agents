@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { num } from "@/lib/serialize";
 import { computeStats, peakBalance } from "@/lib/stats";
 import { allNextOpens } from "@/lib/sessions";
-import { syncEconCalendarFromFinnhub } from "@/lib/providers/finnhub";
+import { advanceEconCalendarSync } from "@/lib/providers/apify-forexfactory";
 import { getLiveQuotes } from "@/lib/providers/yahoo";
 import type { InstrumentSymbol as InstrumentSymbolT } from "@/lib/types";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK, getCurrentRiskState, todaysRealizedPnl } from "@/lib/risk";
@@ -13,10 +13,15 @@ import { computeScaledContracts } from "@/lib/positionSizing";
 export const dynamic = "force-dynamic";
 
 async function resolveEconEvents() {
-  // Opportunistically sync (gated to once/hour internally — see
-  // syncEconCalendarFromFinnhub). Always serve whatever's in the DB regardless of
-  // outcome, so a slow/failed sync never breaks the dashboard.
-  await syncEconCalendarFromFinnhub().catch(() => {});
+  // Opportunistically kick off / poll the async Apify scrape (fast, never blocks —
+  // see advanceEconCalendarSync for why this can't run inline). Always serve
+  // whatever's in the DB regardless of outcome, so a slow/failed scrape never
+  // breaks the dashboard. Apify token was rotated 2026-09-04 after the old one hit
+  // its monthly usage limit — Finnhub was tried as a replacement but its economic
+  // calendar endpoint turned out to be a premium-tier feature this key doesn't have
+  // (src/lib/providers/finnhub.ts kept, not wired in — would need a paid Finnhub
+  // plan to use as an actual fallback).
+  await advanceEconCalendarSync().catch(() => {});
 
   const rows = await prisma.economicEvent.findMany({
     where: { releaseAt: { gte: new Date(), lte: new Date(Date.now() + 24 * 60 * 60 * 1000) } },
