@@ -9,6 +9,7 @@ import { findAccountBySecret, getAccountRiskState, accountTodaysRealizedPnl, upd
 import { computeScaledContracts } from "@/lib/positionSizing";
 import { checkNewsBlackout } from "@/lib/newsBlackout";
 import { SYMBOLS, SESSIONS, isAllowedToTrade } from "@/lib/allowlist";
+import { runRiskWatchdogCheck } from "@/lib/riskWatchdog";
 
 const OUTCOMES = ["HIT_TARGET", "STOPPED_OUT", "STOPPED_OUT_TARGET_HIT_LATER", "CLOSED_AT_DAY_END"] as const;
 
@@ -426,6 +427,10 @@ export async function POST(req: NextRequest) {
 
     if (identity.kind === "legacy") {
       await updateEquityTracking();
+      // Equity/drawdown can only change on a trade close (realized P&L only, no
+      // live mark-to-market) — this is exactly when the risk watchdog needs to
+      // re-check, not on a timer. See src/lib/riskWatchdog.ts.
+      await runRiskWatchdogCheck();
     } else {
       await updateAccountEquityTracking(identity.accountId);
     }

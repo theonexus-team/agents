@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/risk-watchdog",
-      "schedule": "*/15 * * * *"
+      "schedule": "43 13 * * *"
     }
   ]
 }
