@@ -139,6 +139,13 @@ export default function InstrumentScoutPage() {
         not in the cloud. Re-run manually for fresh results.
       </p>
 
+      <p className="text-xs text-warn">
+        Data window is NOT the same length across timeframes — Yahoo caps how far back it serves finer granularity:
+        1h reaches back ~700 days (nearly 2 years), 5m/15m/30m only ~55 days (~2 months). A 1h result is a much more
+        trustworthy sample than a 5m/15m/30m one purely because it covers far more history — don&apos;t weight a good-
+        looking short-window result the same as a longer one.
+      </p>
+
       {error && <Panel className="text-sm text-danger">{error}</Panel>}
 
       {overall === null && !error && <p className="text-sm text-muted">loading…</p>}
