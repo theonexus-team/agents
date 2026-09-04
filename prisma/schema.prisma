@@ -544,3 +544,27 @@ model PushSubscription {
   auth      String
   createdAt DateTime @default(now())
 }
+
+/// Shared feed all agents post to, so their findings aren't siloed in separate
+/// tables nobody cross-references — Risk Watchdog, Trading Analyst, and Instrument
+/// Scout all write here in addition to their own dedicated tables. This is a LOG,
+/// not a task queue: nothing here is "picked up and processed" by another agent
+/// automatically (that would break the review-gated principle established
+/// 2026-09-03 — an agent's own actions stay driven by its own dedicated logic, not
+/// by autonomously reacting to another agent's post). The actual cross-agent
+/// awareness happens where Trading Analyst's Risk Manager step reads the RECENT
+/// rows here as extra context for its own NVIDIA-mediated reasoning (see
+/// /api/cron/trading-analyst) — informs the analysis, never triggers an action by
+/// itself.
+model AgentMessage {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  /// "risk-watchdog" | "trading-analyst" | "instrument-scout"
+  agent     String
+  message   String   @db.Text
+  /// Optional — lets the board page link straight to the source (e.g. /risk-watchdog).
+  url       String?
+
+  @@index([createdAt])
+  @@index([agent])
+}

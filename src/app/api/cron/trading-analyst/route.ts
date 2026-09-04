@@ -5,6 +5,7 @@ import { callLlm } from "@/lib/llm";
 import { STRATEGY_SESSION_ALLOWLIST } from "@/lib/allowlist";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK } from "@/lib/risk";
 import { sendPushToAll } from "@/lib/push";
+import { getRecentBoardMessages, formatBoardForPrompt, postToBoard } from "@/lib/agentBoard";
 
 /**
  * Automated performance-review pipeline. Vercel Cron triggers this on a schedule
@@ -128,21 +129,43 @@ export async function GET(req: NextRequest) {
   const analystUser = `CURRENT ALLOWLIST:\n${formatAllowlist()}\n\nPERFORMANCE THIS WINDOW (${trades.length} trades, ${windowStart.toISOString()} to ${windowEnd.toISOString()}):\n${formatComboStats(comboStats)}`;
 
   let analystFinding = await callLlm(analystSystem, analystUser);
+  await postToBoard(
+    "trading-analyst",
+    `Analyst reviewed ${trades.length} trades (${windowStart.toISOString()} to ${windowEnd.toISOString()}): ${analystFinding}`,
+    "/analyst"
+  ).catch(() => {});
+
+  // Cross-agent context — the Risk Manager's own reasoning should be aware of what
+  // the other agents have been finding, not just static limits. Most directly
+  // relevant: Risk Watchdog's CURRENT status (is the account already stressed right
+  // now?), not just the fixed dollar limits, plus recent board activity generally.
+  const [liveRiskStatus, boardHistory] = await Promise.all([
+    prisma.riskWatchdogStatus.findUnique({ where: { id: "singleton" } }),
+    getRecentBoardMessages(10),
+  ]);
+  const liveRiskLine = liveRiskStatus
+    ? `Risk Watchdog's current live status: ${liveRiskStatus.level} — ${liveRiskStatus.message}`
+    : "Risk Watchdog has no status yet.";
 
   const riskSystem =
     "You are the risk manager reviewing a proposed change to a live futures trading allowlist. " +
     `The account's real risk limits are: max daily loss $${MAX_DAILY_LOSS}, max drawdown from peak equity $${MAX_LOSS_FROM_PEAK}. ` +
+    `${liveRiskLine} — weigh this: don't approve a change that adds risk while the account is already at WARNING or BREACH. ` +
     "Given the analyst's finding, either APPROVE it as safe to act on, or OBJECT with a specific reason " +
-    "(e.g. the analyst is reacting to too small a sample, or the proposed change would concentrate risk). " +
+    "(e.g. the analyst is reacting to too small a sample, the proposed change would concentrate risk, or the account " +
+    "is already under strain per the live risk status above). " +
     "Start your response with either 'APPROVE:' or 'OBJECT:' followed by your reasoning.";
+  const riskUser = `${analystFinding}\n\nRecent activity from other agents:\n${formatBoardForPrompt(boardHistory)}`;
 
-  let riskVerdict = await callLlm(riskSystem, analystFinding);
+  let riskVerdict = await callLlm(riskSystem, riskUser);
 
   if (riskVerdict.trim().toUpperCase().startsWith("OBJECT")) {
     const reviseUser = `${analystUser}\n\nYour original finding:\n${analystFinding}\n\nThe risk manager objected:\n${riskVerdict}\n\nRevise your finding to address this objection, or explain why the objection doesn't apply.`;
     analystFinding = await callLlm(analystSystem, reviseUser);
-    riskVerdict = await callLlm(riskSystem, analystFinding);
+    const revisedRiskUser = `${analystFinding}\n\nRecent activity from other agents:\n${formatBoardForPrompt(boardHistory)}`;
+    riskVerdict = await callLlm(riskSystem, revisedRiskUser);
   }
+  await postToBoard("trading-analyst", `Risk Manager verdict: ${riskVerdict}`, "/analyst").catch(() => {});
 
   const approved = riskVerdict.trim().toUpperCase().startsWith("APPROVE");
 
@@ -156,6 +179,7 @@ export async function GET(req: NextRequest) {
     const draft = await callLlm(adjusterSystem, analystFinding);
     if (!/no change needed/i.test(draft.trim())) {
       proposedDiff = draft;
+      await postToBoard("trading-analyst", `Adjuster proposed a change (pending review): ${draft}`, "/analyst").catch(() => {});
     }
   }
 
