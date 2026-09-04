@@ -8,9 +8,8 @@ import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK, getCurrentRiskState, todaysRealized
 import { findAccountBySecret, getAccountRiskState, accountTodaysRealizedPnl, updateAccountEquityTracking } from "@/lib/accounts";
 import { computeScaledContracts } from "@/lib/positionSizing";
 import { checkNewsBlackout } from "@/lib/newsBlackout";
+import { SYMBOLS, SESSIONS, isAllowedToTrade } from "@/lib/allowlist";
 
-const SYMBOLS = ["MGC", "HG", "MNQ", "MES"] as const;
-const SESSIONS = ["TOKYO", "SHANGHAI", "LONDON", "NEW_YORK"] as const;
 const OUTCOMES = ["HIT_TARGET", "STOPPED_OUT", "STOPPED_OUT_TARGET_HIT_LATER", "CLOSED_AT_DAY_END"] as const;
 
 /** MNQ and MES are correlated enough that opposite-direction positions on both at
@@ -41,36 +40,6 @@ const LIVE_EXECUTION_ALLOWLIST: { symbol: (typeof SYMBOLS)[number]; strategy: st
 
 function isAllowedForLiveExecution(symbol: string, strategy: string, timeframe: string | undefined): boolean {
   return LIVE_EXECUTION_ALLOWLIST.some((a) => a.symbol === symbol && a.strategy === strategy && a.timeframe === timeframe);
-}
-
-/**
- * Which (symbol, strategy, session) combos are currently trusted to trade AT ALL —
- * everything else is blocked outright before any position (paper or real) is ever
- * opened, not just excluded from real execution like LIVE_EXECUTION_ALLOWLIST above.
- * Set 2026-09-03 from a review of the primary account's last 6 trading days (51
- * trades) — every combo that finished net-positive, per the user's explicit list.
- * Some of these (the MES entries especially) are single-trade samples — kept per the
- * user's direct instruction despite the thin sample size, not because the data alone
- * would justify it. MNQ+ORB+Tokyo is deliberately excluded despite a 75% win rate,
- * because its net was still negative (one big loser ate the small wins). MGC isn't
- * listed at all yet — no trades on it in this window to judge either way.
- * Legacy/primary account only — client accounts have no comparable performance
- * history yet, so they aren't filtered by this. Revisit as more trades come in.
- */
-const STRATEGY_SESSION_ALLOWLIST: { symbol: (typeof SYMBOLS)[number]; strategy: string; session: (typeof SESSIONS)[number] }[] = [
-  { symbol: "MNQ", strategy: "Algo 2 First-Touch Zones", session: "LONDON" },
-  { symbol: "HG", strategy: "1m ORB + VWAP", session: "TOKYO" },
-  { symbol: "HG", strategy: "1m ORB + VWAP", session: "SHANGHAI" },
-  { symbol: "MES", strategy: "Algo 2 First-Touch Zones", session: "LONDON" },
-  { symbol: "MES", strategy: "Algo 2 First-Touch Zones", session: "TOKYO" },
-  { symbol: "MNQ", strategy: "1m ORB + VWAP", session: "SHANGHAI" },
-  { symbol: "MNQ", strategy: "1m ORB + VWAP", session: "LONDON" },
-  { symbol: "MNQ", strategy: "1m ORB + VWAP", session: "NEW_YORK" },
-  { symbol: "MES", strategy: "Algo 2 First-Touch Zones", session: "NEW_YORK" },
-];
-
-function isAllowedToTrade(symbol: string, strategy: string, session: string): boolean {
-  return STRATEGY_SESSION_ALLOWLIST.some((a) => a.symbol === symbol && a.strategy === strategy && a.session === session);
 }
 
 const entrySchema = z.object({

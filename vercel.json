@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/trading-analyst",
+      "schedule": "17 21 * * 1-5"
+    }
+  ]
+}

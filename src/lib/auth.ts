@@ -32,3 +32,11 @@ export function checkAccountKey(provided: string | null | undefined, accountDesk
 export function generateToken(bytes = 24): string {
   return randomBytes(bytes).toString("base64url");
 }
+
+/** Vercel Cron sends `Authorization: Bearer $CRON_SECRET` automatically when
+ * CRON_SECRET is set in the project's env vars — this just verifies that header
+ * against it, so /api/cron/* routes can't be triggered by an outside request. */
+export function checkCronSecret(authHeader: string | null): boolean {
+  const provided = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  return secretsMatch(provided, process.env.CRON_SECRET);
+}

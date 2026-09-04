@@ -458,3 +458,36 @@ model BacktestTrade {
   @@index([runId])
   @@index([closedAt])
 }
+
+/// One run of the automated performance-review pipeline (see
+/// /api/cron/trading-analyst), triggered on a schedule by Vercel Cron — not tied to
+/// any local machine. Three roles run as sequential Claude API calls against the
+/// SAME window of primary-account trades: Analyst computes per-combo stats and
+/// flags divergence from STRATEGY_SESSION_ALLOWLIST; Risk Manager checks any
+/// flagged change against the real per-account drawdown limits and can object
+/// (analystFinding then reflects a revised pass); Adjuster drafts a proposed
+/// allowlist diff. Deliberately review-gated per the user's explicit choice
+/// (2026-09-03) — nothing here ever edits route.ts or deploys on its own. A human
+/// (or a future Claude Code session) reads status=PENDING_REVIEW rows and decides.
+model AnalystRun {
+  id             String    @id @default(cuid())
+  createdAt      DateTime  @default(now())
+  /// Trades considered are those with closedAt in [windowStart, windowEnd).
+  windowStart    DateTime
+  windowEnd      DateTime
+  /// How many primary-account trades fell in the window — surfaced directly so a
+  /// reviewer can see at a glance whether a proposal is backed by real sample size
+  /// or is still noise. The Analyst is instructed not to propose changes below a
+  /// minimum trade count (see MIN_TRADES_FOR_PROPOSAL in the route) — "run tests
+  /// longer" per the user, not react to every day's wobble.
+  tradesInWindow Int
+  analystFinding String    @db.Text
+  riskVerdict    String    @db.Text
+  /// Null when nothing crossed the proposal threshold this run (status NO_ACTION).
+  proposedDiff   String?   @db.Text
+  status         String    @default("PENDING_REVIEW")
+  reviewedAt     DateTime?
+
+  @@index([createdAt])
+  @@index([status])
+}
