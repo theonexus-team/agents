@@ -491,3 +491,34 @@ model AnalystRun {
   @@index([createdAt])
   @@index([status])
 }
+
+/// Latest risk-check result for the primary account — a singleton row, overwritten
+/// on every /api/cron/risk-watchdog run (see that route), not a history. Pure
+/// arithmetic against the SAME limits the webhook already enforces (MAX_DAILY_LOSS,
+/// MAX_LOSS_FROM_PEAK from risk.ts) — deliberately no LLM call here, there's nothing
+/// to reason about, just a threshold check that needs to be cheap and reliable.
+model RiskWatchdogStatus {
+  id               String   @id @default("singleton")
+  checkedAt        DateTime @default(now())
+  currentEquity    Decimal
+  peakEquity       Decimal
+  drawdownFromPeak Decimal
+  drawdownPct      Decimal
+  dailyPnl         Decimal
+  dailyLossPct     Decimal
+  /// OK | WARNING (>=70% of either limit) | BREACH (>=100% of either limit)
+  level            String
+  message          String   @db.Text
+}
+
+/// One row per level CHANGE (not every check — a 15-minute poll sitting at WARNING
+/// would otherwise write 96 identical rows/day). Gives a real audit trail of when
+/// things actually got worse or recovered, without the noise.
+model RiskWatchdogAlert {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  level     String
+  message   String   @db.Text
+
+  @@index([createdAt])
+}
