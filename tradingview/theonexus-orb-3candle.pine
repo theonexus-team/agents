@@ -1,0 +1,298 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Theonexus Trading Oracle — 1-Minute Multi-Session ORB + VWAP, 3-candle confirmation.
+//
+// This is a THIRD, separate script from the other two Theonexus companions:
+//   - Theonexus - ORB Breakout            — session opening-range breakout (order-block stops, trend filter)
+//   - Theonexus - OB Reversal             — order-block rejection reversal
+//   - Theonexus - ORB 3-Candle Confirmation (this file) — this one
+// The decision logic here is fundamentally different from ORB Breakout (no order
+// blocks, no trend filter, a strict 3-candle confirmation sequence, a hard VWAP
+// direction gate, and one trade maximum per session) so it's its own script rather
+// than a variant of an existing one. Add alongside the others if running multiple
+// strategies on an instrument — logs to the dashboard under its own strategy name
+// so it's tracked separately from both.
+//
+// !! KEEP THIS SCRIPT PRIVATE — NEVER PUBLISH IT !!
+// Once you fill in the webhook secret and/or PickMyTrade credentials below, this
+// script contains those in plain text inside every alert message.
+//
+// STRATEGY, exactly as specified:
+//   1. Opening Range = ONLY the first real 1-minute candle of the session (locked to
+//      real 1-minute data via request.security regardless of chart timeframe — the
+//      confirmation candles below are NOT locked this way, see design note above).
+//   2. VWAP is a hard directional gate: price above VWAP -> only LONG setups: eligible,
+//      price below VWAP -> only SHORT setups eligible. Toggleable off.
+//   3. A breakout requires a CLOSE outside the ORB (a wick alone doesn't count).
+//   4. The breakout candle is "candle 1." The very next candle ("candle 2") is
+//      checked once: does it ALSO close outside the ORB in the same direction?
+//        - Yes -> continuation confirmed. Entry fires on the FOLLOWING candle
+//          ("candle 3"), if VWAP still allows that direction at that moment.
+//        - No -> continuation is no longer possible for this breakout. From here,
+//          every subsequent candle (starting with candle 2 itself) is checked for
+//          one thing only: did it CLOSE back inside the ORB? A wick back inside is
+//          not enough. The first candle where that happens is the failed-breakout
+//          confirmation, and the reversal entry fires on THAT SAME candle, in the
+//          opposite direction of the original breakout, if VWAP allows it at that
+//          moment. This watch continues indefinitely (no fixed candle-3 cutoff) —
+//          the entry cutoff time below is what eventually ends it, not a candle count.
+//   5. If a new close-outside-the-ORB happens while nothing is currently being
+//      tracked (or while just passively watching for a reversal), it starts a fresh
+//      breakout-tracking cycle. Once a trade is taken, though, nothing else can start
+//      — hard one-trade-per-session cap, regardless of win/loss/stop/target/flatten.
+//   6. Stop = the opposite side of the ORB from the trade's direction (ORB low for a
+//      long, ORB high for a short) — same rule for both continuation and reversal
+//      entries. Target = entry +/- (stop distance * Risk/Reward multiple), both configurable.
+//   7. "Session Profit Target" is an informational input only — the spec described it
+//      as a separate concept from the R:R-driven target formula, and only the R:R
+//      formula has an explicit calculation given, so that's what actually sets the
+//      take-profit. The dollar target isn't wired into the price calculation.
+//   8. New York (and, applied consistently, London and Tokyo too): no NEW entries
+//      after a configurable number of minutes past session open (default 60), and
+//      any open position from this script is force-closed at a configurable number
+//      of minutes past open (default 120), logged to the dashboard as CLOSED_AT_DAY_END.
+//
+// Contracts default to 4 for MNQ/MGC and 1 for HG, all independently configurable.
+// PickMyTrade relay works the same way as the other two scripts: off by default, and
+// when enabled, every strategy.entry()/strategy.close() carries a real computed
+// PickMyTrade JSON as its alert_message — create one "Order fills" TradingView alert
+// pointed at PickMyTrade's webhook to use it. The dashboard alert() calls are
+// separate and unaffected, fired via a normal "Any alert() function call" alert.
+
+//@version=5
+
+strategy("Theonexus - ORB 3-Candle Confirmation", overlay = true, default_qty_type = strategy.fixed,
+     default_qty_value = 1, calc_on_every_tick = false, process_orders_on_close = true,
+     initial_capital = 50000, currency = currency.USD)
+
+// ── Webhook config ──────────────────────────────────────────────────────────
+webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", title = "TradingView Webhook Secret", group = "Webhook")
+symbolChoice  = syminfo.root
+
+// ── Contracts ──────────────────────────────────────────────────────────────
+mnqContracts = input.int(4, "MNQ Contracts", minval = 1, group = "Contracts")
+mgcContracts = input.int(4, "MGC Contracts", minval = 1, group = "Contracts")
+hgContracts  = input.int(1, "HG1 Contracts", minval = 1, group = "Contracts")
+contracts = symbolChoice == "MNQ" ? mnqContracts : symbolChoice == "MGC" ? mgcContracts : hgContracts
+
+// ── Targets ────────────────────────────────────────────────────────────────
+// sessionProfitTarget is informational only — see header note. riskReward is what
+// actually drives the take-profit calculation (Reward = Risk * riskReward).
+sessionProfitTarget = input.float(300, "Session Profit Target ($, informational only)", group = "Targets")
+riskReward = input.float(2.0, "Risk/Reward Multiple", minval = 0.1, group = "Targets")
+
+// ── VWAP directional gate ──────────────────────────────────────────────────
+vwapFilterEnabled = input.bool(true, "VWAP Filter ON/OFF", group = "VWAP")
+vwapVal = ta.vwap(hlc3)
+plot(vwapVal, color = color.new(color.aqua, 0), title = "VWAP")
+bool vwapBiasLong  = not vwapFilterEnabled or close > vwapVal
+bool vwapBiasShort = not vwapFilterEnabled or close < vwapVal
+
+// ── PickMyTrade relay (optional, off by default) ──────────────────────────────
+// See the other two Theonexus scripts for the full explanation — same mechanism.
+pmtEnabled   = input.bool(false, "Relay real fills to PickMyTrade", group = "PickMyTrade")
+pmtToken     = input.string("", "PickMyTrade Token", group = "PickMyTrade")
+pmtAccountId = input.string("", "PickMyTrade Account ID", group = "PickMyTrade")
+pmtSymbol = symbolChoice == "MGC" ? "MGC1!" : symbolChoice == "HG" ? "HG1!" : "MNQ1!"
+
+f_pmtMessage(side, qty) =>
+    pmtEnabled ? '{"symbol":"' + pmtSymbol + '","data":"' + side + '","quantity":' + str.tostring(qty) + ',"token":"' + pmtToken + '","account_id":"' + pmtAccountId + '","order_type":"MKT"}' : ""
+
+// ── Session config ────────────────────────────────────────────────────────
+ref_res = ""
+tmzn = input(defval = "GMT+7", title = "Timezone")
+tokyo    = input.session(defval = "0700-1600", title = "Tokyo Session", group = "Session Times")
+london   = input.session(defval = "1500-2340", title = "London Session", group = "Session Times")
+newyork  = input.session(defval = "2030-0400", title = "New York Session", group = "Session Times")
+
+// Applied consistently across all three sessions, each relative to its own open.
+entryCutoffMinutes = input.int(60, "Entry cutoff (minutes after session open)", minval = 1, group = "Time Management")
+forceFlatMinutes   = input.int(120, "Forced flat (minutes after session open)", minval = 1, group = "Time Management")
+
+// ── 1-minute-locked opening range via request.security ─────────────────────
+// Same technique as the ORB Breakout script: the ORB itself (first real 1-minute
+// candle of the session) never depends on what timeframe you're viewing the chart
+// at. The confirmation-candle sequence below runs on the OUTER chart's own bars —
+// see the header design note for why.
+open_bar(t) => na(t[1]) and not na(t) or t[1] < t ? 1 : 0
+
+get_ohlc(s) =>
+    var float _open  = na
+    var float _high  = na
+    var float _low   = na
+    var float _close = na
+    _open  := s ? open : nz(_open[1], open)
+    _high  := s or high > _high[1] ? high : nz(_high[1], high)
+    _low   := s or low < _low[1] ? low : nz(_low[1], low)
+    _close := close
+    [_open, _high, _low, _close]
+
+f_session1mOR(sess) =>
+    tS = time(ref_res, sess, tmzn)
+    sw = ta.change(open_bar(tS)) > 0
+    [_o, h, l, _c] = get_ohlc(sw)
+    var float orHigh = na
+    var float orLow  = na
+    if sw
+        orHigh := h
+        orLow  := l
+    [orHigh, orLow, sw]
+
+[tk_orb_high, tk_orb_low, tk_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(tokyo))
+[ld_orb_high, ld_orb_low, ld_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(london))
+[ny_orb_high, ny_orb_low, ny_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(newyork))
+
+// ── Core per-session state machine ──────────────────────────────────────────
+f_manageSession(newSession, orHigh, orLow, sessionLabel, sym, contracts, rr, cutoffMin, flatMin, secret) =>
+    var bool tradeTaken = false
+    var int breakoutDir = 0             // 0 = none, 1 = long-direction breakout, -1 = short-direction breakout
+    var int barsSinceBreakout = na       // na = not currently tracking a breakout
+    var bool continuationConfirmed = false
+    var bool inLong = false
+    var bool inShort = false
+    var float stopPx = na
+    var float targetPx = na
+    var float sessionOpenTime = na
+
+    if newSession
+        tradeTaken := false
+        breakoutDir := 0
+        barsSinceBreakout := na
+        continuationConfirmed := false
+        sessionOpenTime := time
+        // Deliberately NOT resetting inLong/inShort/stopPx/targetPx here — an open
+        // position from the tail end of the prior session window should still be
+        // managed by its own stop/target/force-flat, not silently abandoned.
+
+    int minutesSinceOpen = na(sessionOpenTime) ? na : int((time - sessionOpenTime) / 60000)
+    bool pastEntryCutoff = not na(minutesSinceOpen) and minutesSinceOpen >= cutoffMin
+    bool pastFlatTime = not na(minutesSinceOpen) and minutesSinceOpen >= flatMin
+
+    // ── Force-flat: any open position from this session gets closed here, no matter what ──
+    if pastFlatTime and inLong
+        strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
+        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
+        inLong := false
+    if pastFlatTime and inShort
+        strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
+        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
+        inShort := false
+
+    // ── Normal target/stop exit ──────────────────────────────────────────────
+    if inLong and (high >= targetPx or low <= stopPx)
+        float exitPx = high >= targetPx ? targetPx : stopPx
+        strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
+        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+        inLong := false
+    if inShort and (low <= targetPx or high >= stopPx)
+        float exitPx = low <= targetPx ? targetPx : stopPx
+        strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
+        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+        inShort := false
+
+    // ── Breakout tracking / entry logic — only while eligible for a new trade ──
+    if not tradeTaken and not pastEntryCutoff and not na(orHigh) and not na(orLow)
+        bool closedAboveOrb = close > orHigh
+        bool closedBelowOrb = close < orLow
+        bool closedInsideOrb = close <= orHigh and close >= orLow
+
+        if continuationConfirmed
+            // This is "candle 3" for a confirmed continuation — fire if VWAP still allows it.
+            bool vwapOk = breakoutDir == 1 ? vwapBiasLong : vwapBiasShort
+            if vwapOk
+                float entryPx = close
+                float stop = breakoutDir == 1 ? orLow : orHigh
+                float risk = math.abs(entryPx - stop)
+                float target = breakoutDir == 1 ? entryPx + risk * rr : entryPx - risk * rr
+                if breakoutDir == 1
+                    inLong := true
+                    stopPx := stop
+                    targetPx := target
+                    strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
+                    alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                else
+                    inShort := true
+                    stopPx := stop
+                    targetPx := target
+                    strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
+                    alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                tradeTaken := true
+            breakoutDir := 0
+            barsSinceBreakout := na
+            continuationConfirmed := false
+
+        else if not na(barsSinceBreakout)
+            if barsSinceBreakout == 0
+                // This is "candle 2" — the one and only continuation check for this breakout.
+                bool stillOutside = breakoutDir == 1 ? closedAboveOrb : closedBelowOrb
+                if stillOutside
+                    continuationConfirmed := true
+                    barsSinceBreakout := barsSinceBreakout + 1
+                else if closedInsideOrb
+                    // Reversal confirmed as early as candle 2 itself.
+                    int revDir = breakoutDir == 1 ? -1 : 1
+                    bool vwapOk = revDir == 1 ? vwapBiasLong : vwapBiasShort
+                    if vwapOk
+                        float entryPx = close
+                        float stop = revDir == 1 ? orLow : orHigh
+                        float risk = math.abs(entryPx - stop)
+                        float target = revDir == 1 ? entryPx + risk * rr : entryPx - risk * rr
+                        if revDir == 1
+                            inLong := true
+                            stopPx := stop
+                            targetPx := target
+                            strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
+                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                        else
+                            inShort := true
+                            stopPx := stop
+                            targetPx := target
+                            strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
+                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                        tradeTaken := true
+                    breakoutDir := 0
+                    barsSinceBreakout := na
+                else
+                    barsSinceBreakout := barsSinceBreakout + 1
+            else
+                // Candle 3, 4, 5... — watching indefinitely for a close back inside the ORB.
+                if closedInsideOrb
+                    int revDir = breakoutDir == 1 ? -1 : 1
+                    bool vwapOk = revDir == 1 ? vwapBiasLong : vwapBiasShort
+                    if vwapOk
+                        float entryPx = close
+                        float stop = revDir == 1 ? orLow : orHigh
+                        float risk = math.abs(entryPx - stop)
+                        float target = revDir == 1 ? entryPx + risk * rr : entryPx - risk * rr
+                        if revDir == 1
+                            inLong := true
+                            stopPx := stop
+                            targetPx := target
+                            strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
+                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                        else
+                            inShort := true
+                            stopPx := stop
+                            targetPx := target
+                            strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
+                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"ORB 3-Candle Confirmation","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+                        tradeTaken := true
+                    breakoutDir := 0
+                    barsSinceBreakout := na
+                else
+                    barsSinceBreakout := barsSinceBreakout + 1
+
+        else
+            // Nothing currently tracked — watch for a fresh breakout to start the cycle.
+            if closedAboveOrb or closedBelowOrb
+                breakoutDir := closedAboveOrb ? 1 : -1
+                barsSinceBreakout := 0
+
+    [inLong, inShort]
+
+[tkLong, tkShort] = f_manageSession(tk_switch, tk_orb_high, tk_orb_low, "TOKYO",    symbolChoice, contracts, riskReward, entryCutoffMinutes, forceFlatMinutes, webhookSecret)
+[ldLong, ldShort] = f_manageSession(ld_switch, ld_orb_high, ld_orb_low, "LONDON",   symbolChoice, contracts, riskReward, entryCutoffMinutes, forceFlatMinutes, webhookSecret)
+[nyLong, nyShort] = f_manageSession(ny_switch, ny_orb_high, ny_orb_low, "NEW_YORK", symbolChoice, contracts, riskReward, entryCutoffMinutes, forceFlatMinutes, webhookSecret)
+
+// ── Chart markers ────────────────────────────────────────────────────────────
+plotshape(tkLong or ldLong or nyLong, title = "Long Entry", style = shape.triangleup, location = location.belowbar, color = color.new(color.teal, 0), size = size.small, text = "BUY")
+plotshape(tkShort or ldShort or nyShort, title = "Short Entry", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0), size = size.small, text = "SELL")

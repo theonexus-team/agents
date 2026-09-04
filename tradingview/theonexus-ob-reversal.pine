@@ -1,0 +1,400 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Order-block detection is a simplified port of "Price Action Toolkit Lite [UAlgo]"
+// (© UAlgo), licensed CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/
+// — noncommercial use only, and if you ever share/publish this script it must carry
+// that same license + credit.
+//
+// This is 1 of 2 companion scripts for Theonexus Trading Oracle:
+//   - Theonexus - ORB Breakout   (separate file) — session opening-range breakout
+//   - Theonexus - OB Reversal    (this file) — order-block rejection reversal
+// Add both to the same chart if you're running both strategies on an instrument.
+//
+// !! KEEP THIS SCRIPT PRIVATE — NEVER PUBLISH IT !!
+// Once you fill in the webhook secret and/or PickMyTrade credentials below, this
+// script contains those in plain text inside every alert message. Publishing it
+// publicly would leak them (and would need to comply with the CC BY-NC-SA terms
+// above regardless).
+//
+// CONVERTED FROM indicator() TO strategy(): purely to unlock strategy.entry()/
+// strategy.close()'s `alert_message` parameter, which lets a real, computed
+// PickMyTrade order JSON travel with each fill — see the "PickMyTrade relay"
+// section below. The Strategy Tester tab this adds is decorative only: its
+// simulated equity curve has no connection to the real dashboard's numbers —
+// ignore it, the dashboard is the source of truth. Every entry/exit still ALSO
+// fires the original dynamic alert() call to the dashboard webhook, completely
+// unchanged from before this conversion.
+//
+// STRATEGY: order-block reversal. Not session-gated — watches continuously. Requires
+// a REJECTION candle: a bar wicks into a still-valid bullish order block (support) or
+// bearish one (resistance) and CLOSES back outside it, confirming the level held. The
+// entry itself fires on the NEXT bar's close, not the rejection bar — "take the next
+// candle out to make sure." Stop = the edge of the block that rejected. Target = 80
+// ticks/4 contracts for MGC & MNQ, 20 ticks/1 contract for HG (picked automatically
+// from the chart's instrument). Logs to the dashboard as strategy "OB Reversal" with a
+// real contract count, so P&L there is computed from actual ticks * tick value *
+// contracts. Each block only trades ONCE (reusing the order-block type's unused
+// `broken` field as a "consumed" flag) — without this, a wick-only stop-out doesn't
+// close-invalidate the block, so a failing level could fire repeat losing entries, and
+// a block could get traded the instant it formed, before it had any chance to prove
+// itself as real support/resistance. Both this and the confirmation-candle requirement
+// were added after seeing too many low-quality, immediately-losing signals live.
+//
+// Both the instrument symbol AND tick size sent to the webhook are read automatically
+// from the chart (syminfo.root / syminfo.mintick) — there are no manual per-instrument
+// fields to forget to update. A prior version had manual "Instrument Symbol" and "Tick
+// size" inputs, and leaving either one on gold's values while the indicator was actually
+// on an MNQ chart corrupted trade data twice: wrong dollar P&L and a target so small
+// (relative to real Nasdaq moves) it hit almost instantly. Fixed after seeing exactly
+// that happen live, both times.
+//
+// Once a trade's floating profit passes $160 (configurable), its stop starts trailing
+// behind price by a fixed tick distance (also configurable) instead of sitting at the
+// original block-edge stop — goal is locking in a real gain instead of round-tripping
+// back down to the original stop before the fixed target ever hits. The target itself
+// is untouched: a straight run to it still exits there.
+//
+// One open position per instrument at a time, enforced by the dashboard's webhook —
+// this script and the ORB Breakout script can't both hold a position on the same
+// instrument simultaneously; a second entry attempt while one is already open is
+// rejected server-side rather than opening a conflicting long+short.
+//
+// Capped at 3 trades per session (configurable) — was firing far too many signals
+// per session and dragging the win rate down. Once the cap is hit, no new entries
+// arm until the next session starts; anything already pending still fires normally.
+//
+// The `contracts` value sent to the DASHBOARD webhook (obrContracts, fixed at 4 or 1)
+// is only a BASELINE — the dashboard's own webhook overrides it for MGC/MNQ with a
+// live risk-scaled count (down to 1 contract deep in drawdown, up to 40 as profit
+// grows), since Pine has no way to know current account drawdown/profit before firing
+// an alert. The PickMyTrade relay below uses this same baseline count directly (real
+// execution doesn't get the dashboard's post-hoc scaling — see that section).
+
+//@version=5
+
+strategy("Theonexus - OB Reversal", overlay = true, default_qty_type = strategy.fixed,
+     default_qty_value = 1, calc_on_every_tick = false, process_orders_on_close = true,
+     initial_capital = 50000, currency = currency.USD)
+
+// ── Webhook config ──────────────────────────────────────────────────────────
+webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", title = "TradingView Webhook Secret", group = "Webhook")
+// Read directly from the chart instead of manual inputs — see header note above.
+symbolChoice  = syminfo.root
+tickSize      = syminfo.mintick
+
+// ── PickMyTrade relay (optional, off by default) ──────────────────────────────
+// When enabled, every strategy.entry()/strategy.close() call below also carries a
+// PickMyTrade-shaped alert_message built from REAL computed values (symbol, side,
+// contracts) — not TradingView's {{placeholder}} syntax. Create ONE TradingView
+// alert on this script with condition "Order fills" pointed at PickMyTrade's
+// webhook URL, and every fill sends the correct JSON automatically — no per-
+// direction, per-instrument templates needed, and no 300-character alert-message
+// box constraint, since this message is computed by the script, not typed by hand.
+// This does NOT touch the dashboard alert() calls below, which are unchanged.
+pmtEnabled   = input.bool(false, "Relay real fills to PickMyTrade", group = "PickMyTrade")
+pmtToken     = input.string("", "PickMyTrade Token", group = "PickMyTrade")
+pmtAccountId = input.string("", "PickMyTrade Account ID", group = "PickMyTrade")
+// TradingView/PickMyTrade continuous-contract ticker convention (confirmed against
+// a working PickMyTrade alert for HG -> "HG1!"; MGC/MNQ follow the same pattern but
+// haven't been confirmed live yet — verify on first real fill for those two).
+pmtSymbol = symbolChoice == "MGC" ? "MGC1!" : symbolChoice == "HG" ? "HG1!" : "MNQ1!"
+
+f_pmtMessage(side, qty) =>
+    pmtEnabled ? '{"symbol":"' + pmtSymbol + '","data":"' + side + '","quantity":' + str.tostring(qty) + ',"token":"' + pmtToken + '","account_id":"' + pmtAccountId + '","order_type":"MKT"}' : ""
+
+// ── Session labeling only (this strategy doesn't gate on session) ───────────
+ref_res = ""
+tmzn = input(defval="GMT+7", title = "Timezone", group = "Session (labeling only)")
+tokyo    = input.session(defval = "0700-1600", title = "Tokyo Session", group = "Session (labeling only)")
+shanghai = input.session(defval = "0800-1500", title = "Shanghai Session", group = "Session (labeling only)")
+london   = input.session(defval = "1500-2340", title = "London Session", group = "Session (labeling only)")
+newyork  = input.session(defval = "2030-0400", title = "New York Session", group = "Session (labeling only)")
+
+TK = time(ref_res, tokyo, tmzn)
+SH = time(ref_res, shanghai, tmzn)
+LD = time(ref_res, london, tmzn)
+NY = time(ref_res, newyork, tmzn)
+
+bool tkActive = not na(TK)
+bool shActive = not na(SH)
+bool ldActive = not na(LD)
+
+// Session-change detection, only used to reset the per-session trade cap below —
+// this strategy still doesn't gate WHEN it watches, only how many entries per session.
+open_bar(t) => na(t[1]) and not na(t) or t[1] < t ? 1 : 0
+bool tk_switch = ta.change(open_bar(TK)) > 0
+bool sh_switch = ta.change(open_bar(SH)) > 0
+bool ld_switch = ta.change(open_bar(LD)) > 0
+bool ny_switch = ta.change(open_bar(NY)) > 0
+bool anySessionSwitch = tk_switch or sh_switch or ld_switch or ny_switch
+
+get_minutes() =>
+    m =
+         timeframe.isseconds ? timeframe.multiplier / 60 :
+         timeframe.isintraday ? timeframe.multiplier :
+         timeframe.isdaily ? timeframe.multiplier * 1440 :
+         timeframe.isweekly ? timeframe.multiplier * 10080 :
+         timeframe.ismonthly ? timeframe.multiplier * 42800 :
+         na
+
+// ── Order blocks (simplified port of "Price Action Toolkit Lite [UAlgo]", CC BY-NC-SA
+// 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/, © UAlgo) ────────────────
+// Structure/break-of-structure detection is ported as-is from the original; liquidity
+// sweeps, trend lines, the zigzag line drawing, and the watermark were dropped since
+// they're not needed here. Keep this script private per that license (see header).
+obShow      = input.bool(true, "Show Order Blocks", group = "Order Blocks")
+obStructLen = input.int(9, "Order Block Structure Length", group = "Order Blocks")
+obKeepCount = input.int(2, "Order Blocks to Keep Visible", minval = 1, maxval = 10, group = "Order Blocks")
+
+type orderblock
+    float value
+    int barStart
+    int barEnd
+    box block
+    bool broken
+
+var array<orderblock> bullishOrderblock = array.new<orderblock>()
+var array<orderblock> bearishOrderblock = array.new<orderblock>()
+var array<int> obHighValIndex = array.new<int>()
+var array<int> obLowValIndex = array.new<int>()
+var array<float> obHighVal = array.new_float()
+var array<float> obLowVal = array.new_float()
+
+var bool obDrawUp = false
+var bool obDrawDown = false
+var int obTrend = 1
+
+obAtr = ta.atr(14)
+
+obToUp = high[obStructLen] >= ta.highest(high, obStructLen)
+obToDown = low[obStructLen] <= ta.lowest(low, obStructLen)
+obTrend := obTrend == 1 and obToDown ? -1 : obTrend == -1 and obToUp ? 1 : obTrend
+
+if ta.change(obTrend) != 0 and obTrend == 1
+    array.push(obHighValIndex, time[obStructLen])
+    array.push(obHighVal, high[obStructLen])
+    if array.size(obLowVal) > 1
+        obDrawUp := false
+
+if ta.change(obTrend) != 0 and obTrend == -1
+    array.push(obLowValIndex, time[obStructLen])
+    array.push(obLowVal, low[obStructLen])
+    if array.size(obHighVal) > 1
+        obDrawDown := false
+
+if array.size(obLowVal) > 1 and obDrawDown == false
+    if close < array.get(obLowVal, array.size(obLowVal) - 1)
+        obDrawDown := true
+        if obShow
+            orderblock newOb = orderblock.new()
+            float maxV = 0
+            int barT = na
+            for i = (time - array.get(obLowValIndex, array.size(obLowValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
+                if high[i] > maxV
+                    maxV := high[i]
+                    barT := time[i]
+            newOb.barStart := barT
+            newOb.barEnd := time
+            newOb.broken := false
+            newOb.value := maxV
+            newOb.block := box.new(left = newOb.barStart, top = newOb.value - obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.red, 80), border_width = 1, border_color = color.new(color.red, 80))
+            array.push(bearishOrderblock, newOb)
+            if array.size(bearishOrderblock) > 20
+                array.shift(bearishOrderblock)
+
+if array.size(obHighVal) > 1 and obDrawUp == false
+    if close > array.get(obHighVal, array.size(obHighVal) - 1)
+        obDrawUp := true
+        if obShow
+            orderblock newOb = orderblock.new()
+            float minV = 999999999
+            int barT = na
+            for i = (time - array.get(obHighValIndex, array.size(obHighValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
+                if low[i] < minV
+                    minV := low[i]
+                    barT := time[i]
+            newOb.barStart := barT
+            newOb.barEnd := time
+            newOb.broken := false
+            newOb.value := minV
+            newOb.block := box.new(left = newOb.barStart, top = newOb.value + obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.teal, 80), border_width = 1, border_color = color.new(color.teal, 80))
+            array.push(bullishOrderblock, newOb)
+            if array.size(bullishOrderblock) > 20
+                array.shift(bullishOrderblock)
+
+// Invalidate/remove order blocks once price closes back through them
+if array.size(bullishOrderblock) > 0
+    orderblock testOb = na
+    int obCounter = 0
+    for i = array.size(bullishOrderblock) - 1 to 0 by 1
+        testOb := array.get(bullishOrderblock, i)
+        if obCounter < obKeepCount
+            testOb.block.set_right(time)
+            if close < testOb.value
+                testOb.block.delete()
+                array.remove(bullishOrderblock, i)
+            obCounter := obCounter + 1
+        else
+            testOb.block.set_right(testOb.barStart)
+
+if array.size(bearishOrderblock) > 0
+    orderblock testOb2 = na
+    int obCounter2 = 0
+    for i = array.size(bearishOrderblock) - 1 to 0 by 1
+        testOb2 := array.get(bearishOrderblock, i)
+        if obCounter2 < obKeepCount
+            testOb2.block.set_right(time)
+            if close > testOb2.value
+                testOb2.block.delete()
+                array.remove(bearishOrderblock, i)
+            obCounter2 := obCounter2 + 1
+        else
+            testOb2.block.set_right(testOb2.barStart)
+
+// ── Strategy: order-block reversal ───────────────────────────────────────────
+obrEnabled = input.bool(true, "Enable OB Reversal Strategy", group = "OB Reversal")
+obrMinAgeBars = input.int(3, "Minimum bars since block formed before trading it", minval = 0, group = "OB Reversal")
+// Was firing far too many signals per session and dragging the win rate down.
+// Once this many entries have fired since the current session started, no new
+// entries are armed until the next session begins — trades already pending from
+// before the cap was hit still fire normally, only fresh detection is blocked.
+obrMaxTradesPerSession = input.int(3, "Max trades per session", minval = 1, group = "OB Reversal")
+var int obrTradesThisSession = 0
+if anySessionSwitch
+    obrTradesThisSession := 0
+bool obrSessionCapReached = obrTradesThisSession >= obrMaxTradesPerSession
+
+obrTargetTicks = symbolChoice == "HG" ? 20 : 80
+obrContracts   = symbolChoice == "HG" ? 1 : 4
+obrMinAgeMs = obrMinAgeBars * get_minutes() * 60000
+// Real dollar-per-tick value, for the trailing stop below to arm off an actual
+// dollar profit figure instead of raw ticks.
+tickDollarValue = symbolChoice == "HG" ? 12.50 : symbolChoice == "MNQ" ? 0.50 : 1.00
+
+// ── Trailing stop ─────────────────────────────────────────────────────────────
+// Same behavior as the ORB Breakout script: once floating profit passes this
+// dollar amount, the stop trails behind price by a fixed tick distance instead of
+// sitting at the original block-edge stop. Only ever tightens. Target is untouched.
+trailArmProfit = input.float(160, "Arm trailing stop once profit exceeds ($)", group = "Trailing Stop")
+trailTicks     = input.int(20, "Trail distance (ticks)", minval = 1, group = "Trailing Stop")
+
+// Finds the nearest still-tradeable block price is touching right now. Skips
+// blocks already used for an entry (ob.broken, repurposed as a "consumed" flag —
+// a wick-only stop-out doesn't close-invalidate the block, so without this the
+// same failing level could get re-traded losing entry after losing entry) and
+// blocks younger than obrMinAgeBars (an entry the instant a block forms is
+// trading an unproven level, not a real retest).
+f_touchedBullishOB() =>
+    orderblock matched = na
+    if array.size(bullishOrderblock) > 0
+        for i = array.size(bullishOrderblock) - 1 to 0 by 1
+            ob = array.get(bullishOrderblock, i)
+            float obTop = ob.value + obAtr
+            float obBottom = ob.value
+            if na(matched) and not ob.broken and (time - ob.barEnd) >= obrMinAgeMs and low <= obTop and high >= obBottom
+                matched := ob
+    matched
+
+f_touchedBearishOB() =>
+    orderblock matched = na
+    if array.size(bearishOrderblock) > 0
+        for i = array.size(bearishOrderblock) - 1 to 0 by 1
+            ob = array.get(bearishOrderblock, i)
+            float obTop = ob.value
+            float obBottom = ob.value - obAtr
+            if na(matched) and not ob.broken and (time - ob.barEnd) >= obrMinAgeMs and low <= obTop and high >= obBottom
+                matched := ob
+    matched
+
+// Which session is active right now, for logging only — this strategy doesn't
+// gate on session.
+obrSessionLabel = tkActive ? "TOKYO" : shActive ? "SHANGHAI" : ldActive ? "LONDON" : "NEW_YORK"
+
+var bool obrInLong = false
+var bool obrInShort = false
+var float obrStopPx = na
+var float obrTargetPx = na
+var float obrEntryPx = na
+var bool obrTrailArmed = false
+
+// Confirmation state: a block only qualifies once a bar wicks into it AND
+// CLOSES back outside it (a rejection candle — price tested the level and got
+// pushed back). Even then, we don't enter on that same bar: it's marked
+// "pending" here, and the actual entry fires on the NEXT bar's close instead,
+// per "take the next candle out to make sure."
+var orderblock obrPendingBullOb = na
+var orderblock obrPendingBearOb = na
+
+// 1) Fire an entry that was armed on the PRIOR bar, before any new detection
+// below can arm a fresh one — this is what makes it a one-bar delay, not
+// same-bar. Order matters here.
+if not na(obrPendingBullOb)
+    obrInLong := true
+    obrTrailArmed := false
+    obrEntryPx := close
+    obrStopPx := obrPendingBullOb.value
+    obrTargetPx := close + tickSize * obrTargetTicks
+    obrTradesThisSession := obrTradesThisSession + 1
+    strategy.entry("Long", strategy.long, qty = obrContracts, alert_message = f_pmtMessage("buy", obrContracts))
+    alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","direction":"LONG","session":"' + obrSessionLabel + '","strategy":"OB Reversal","entryPrice":' + str.tostring(close, format.mintick) + ',"stopPrice":' + str.tostring(obrStopPx, format.mintick) + ',"targetPrice":' + str.tostring(obrTargetPx, format.mintick) + ',"contracts":' + str.tostring(obrContracts) + '}', alert.freq_once_per_bar_close)
+    obrPendingBullOb := na
+
+if not na(obrPendingBearOb)
+    obrInShort := true
+    obrTrailArmed := false
+    obrEntryPx := close
+    obrStopPx := obrPendingBearOb.value
+    obrTargetPx := close - tickSize * obrTargetTicks
+    obrTradesThisSession := obrTradesThisSession + 1
+    strategy.entry("Short", strategy.short, qty = obrContracts, alert_message = f_pmtMessage("sell", obrContracts))
+    alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","direction":"SHORT","session":"' + obrSessionLabel + '","strategy":"OB Reversal","entryPrice":' + str.tostring(close, format.mintick) + ',"stopPrice":' + str.tostring(obrStopPx, format.mintick) + ',"targetPrice":' + str.tostring(obrTargetPx, format.mintick) + ',"contracts":' + str.tostring(obrContracts) + '}', alert.freq_once_per_bar_close)
+    obrPendingBearOb := na
+
+// 2) Detect a fresh rejection candle to arm for the NEXT bar. Blocked once the
+// per-session cap is reached — an already-pending entry above still fires though.
+if obrEnabled and not obrSessionCapReached and not obrInLong and not obrInShort and na(obrPendingBullOb) and na(obrPendingBearOb)
+    touchedBullOb = f_touchedBullishOB()
+    touchedBearOb = f_touchedBearishOB()
+    // Nested `if` here, not `and` — Pine's `and` evaluates both sides regardless
+    // of the first, so `not na(x) and x.value > ...` still tries to read `.value`
+    // on a na object and crashes at runtime. Nesting only reads `.value` once
+    // we're already inside the not-na branch.
+    if not na(touchedBullOb)
+        if close > (touchedBullOb.value + obAtr)
+            touchedBullOb.broken := true
+            obrPendingBullOb := touchedBullOb
+    else if not na(touchedBearOb)
+        if close < (touchedBearOb.value - obAtr)
+            touchedBearOb.broken := true
+            obrPendingBearOb := touchedBearOb
+
+// Trailing stop: once floating profit clears trailArmProfit, the stop starts
+// following price at a fixed tick distance instead of sitting at the block edge.
+// Only ever tightens. Target is untouched.
+if obrInLong
+    float floatingProfit = ((high - obrEntryPx) / tickSize) * tickDollarValue * obrContracts
+    if not obrTrailArmed and floatingProfit >= trailArmProfit
+        obrTrailArmed := true
+    if obrTrailArmed
+        obrStopPx := math.max(obrStopPx, high - trailTicks * tickSize)
+
+if obrInShort
+    float floatingProfit = ((obrEntryPx - low) / tickSize) * tickDollarValue * obrContracts
+    if not obrTrailArmed and floatingProfit >= trailArmProfit
+        obrTrailArmed := true
+    if obrTrailArmed
+        obrStopPx := math.min(obrStopPx, low + trailTicks * tickSize)
+
+if obrInLong and (high >= obrTargetPx or low <= obrStopPx)
+    float obrExitPx = high >= obrTargetPx ? obrTargetPx : obrStopPx
+    strategy.close("Long", alert_message = f_pmtMessage("close", obrContracts))
+    alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","exitPrice":' + str.tostring(obrExitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+    obrInLong := false
+
+if obrInShort and (low <= obrTargetPx or high >= obrStopPx)
+    float obrExitPx = low <= obrTargetPx ? obrTargetPx : obrStopPx
+    strategy.close("Short", alert_message = f_pmtMessage("close", obrContracts))
+    alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","exitPrice":' + str.tostring(obrExitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+    obrInShort := false
+
+plotshape(obrInLong and obrInLong[1] == false, title = "OB Reversal Buy", style = shape.labelup, location = location.belowbar, color = color.new(color.blue, 0), size = size.tiny, text = "OBR BUY", textcolor = color.white)
+plotshape(obrInShort and obrInShort[1] == false, title = "OB Reversal Sell", style = shape.labeldown, location = location.abovebar, color = color.new(color.purple, 0), size = size.tiny, text = "OBR SELL", textcolor = color.white)

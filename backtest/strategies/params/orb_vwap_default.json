@@ -1,0 +1,10 @@
+{
+  "min_profit_usd": 160,
+  "breakout_window_minutes": 15,
+  "force_flat_minutes": 120,
+  "vwap_filter_enabled": true,
+  "trend_override_window_bars": 3,
+  "ob_struct_len": 9,
+  "ob_keep_count": 2,
+  "block_entry_inside_ob": true
+}

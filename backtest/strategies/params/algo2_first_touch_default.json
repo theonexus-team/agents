@@ -1,0 +1,14 @@
+{
+  "zone_touch_tick_tolerance": 1,
+  "first_touch_only": true,
+  "max_trades_per_zone": 1,
+  "zone_to_zone_target": true,
+  "profit_cap_usd": 0,
+  "min_age_bars": 3,
+  "max_trades_per_session": 3,
+  "ob_struct_len": 9,
+  "ob_keep_count": 2,
+  "mnq_contracts": 2,
+  "mgc_contracts": 4,
+  "hg_contracts": 1
+}

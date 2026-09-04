@@ -1,0 +1,31 @@
+{
+  "label": "Funded phase: turtle_soup + orb_vwap on MNQ (dynamic ladder), optimal_trade_entry on HG (fixed 1x)",
+  "starting_balance": 150000,
+  "max_loss_from_peak": 2000,
+  "sizing_mode": "dynamic",
+  "from": "2026-07-28",
+  "to": "2026-08-21",
+  "source_note": "Dynamic contract sizing (compute_scaled_contracts ladder) once funded, no time pressure -- see eval_mnq_hg.json for the fixed-size eval-phase version of the same 3 legs",
+  "legs": [
+    {
+      "strategy": "turtle_soup",
+      "symbol": "MNQ",
+      "params": { "swing_lookback": 3, "max_trades_per_session": 3 }
+    },
+    {
+      "strategy": "optimal_trade_entry",
+      "symbol": "HG",
+      "params": { "swing_lookback": 3, "fib_shallow": 0.618, "fib_deep": 0.786, "max_trades_per_session": 3 }
+    },
+    {
+      "strategy": "orb_vwap",
+      "symbol": "MNQ",
+      "params": {
+        "min_profit_usd": 160, "breakout_window_minutes": 15, "force_flat_minutes": 120,
+        "vwap_filter_enabled": true, "trend_override_window_bars": 3,
+        "ob_struct_len": 9, "ob_keep_count": 2,
+        "block_entry_inside_ob": true
+      }
+    }
+  ]
+}

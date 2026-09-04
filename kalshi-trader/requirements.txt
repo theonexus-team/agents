@@ -1,0 +1,6 @@
+psycopg[binary]>=3.2
+python-dotenv>=1.0
+cryptography>=43.0
+requests>=2.32
+websockets>=13.0
+pytest>=8.0

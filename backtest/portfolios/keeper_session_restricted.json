@@ -1,0 +1,41 @@
+{
+  "label": "Keeper set (session-restricted): orb_vwap/HG (NY+London only), orb_vwap/MNQ (all sessions), algo2_first_touch/MNQ (skip New York)",
+  "starting_balance": 150000,
+  "max_loss_from_peak": 2000,
+  "sizing_mode": "dynamic",
+  "from": "2026-07-28",
+  "to": "2026-08-21",
+  "source_note": "orb_vwap/HG lost money in Tokyo (-$800) and Shanghai (-$325); algo2/MNQ lost money in New York (-$366) while orb_vwap/MNQ carries that session -- both restricted based on the per-session breakdown",
+  "legs": [
+    {
+      "strategy": "orb_vwap",
+      "symbol": "HG",
+      "params": {
+        "min_profit_usd": 160, "breakout_window_minutes": 15, "force_flat_minutes": 120,
+        "vwap_filter_enabled": true, "trend_override_window_bars": 3,
+        "ob_struct_len": 9, "ob_keep_count": 2,
+        "block_entry_inside_ob": true, "disabled_sessions": ["TOKYO", "SHANGHAI"]
+      }
+    },
+    {
+      "strategy": "orb_vwap",
+      "symbol": "MNQ",
+      "params": {
+        "min_profit_usd": 160, "breakout_window_minutes": 15, "force_flat_minutes": 120,
+        "vwap_filter_enabled": true, "trend_override_window_bars": 3,
+        "ob_struct_len": 9, "ob_keep_count": 2,
+        "block_entry_inside_ob": true
+      }
+    },
+    {
+      "strategy": "algo2_first_touch",
+      "symbol": "MNQ",
+      "params": {
+        "zone_touch_tick_tolerance": 1, "first_touch_only": true, "max_trades_per_zone": 1,
+        "zone_to_zone_target": true, "profit_cap_usd": 0, "min_age_bars": 3,
+        "max_trades_per_session": 3, "ob_struct_len": 9, "ob_keep_count": 2,
+        "disabled_sessions": ["NEW_YORK"]
+      }
+    }
+  ]
+}

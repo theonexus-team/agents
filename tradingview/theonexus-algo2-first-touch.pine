@@ -1,0 +1,404 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Theonexus Trading Oracle — Algo #2: First-Touch Order Block / Sell Block & Buy
+// Block Strategy, MERGED with OB Reversal's proven discipline mechanisms. Order-
+// block detection is a simplified port of "Price Action Toolkit Lite [UAlgo]"
+// (© UAlgo), licensed CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/
+// — noncommercial use only, and if you ever share/publish this script it must carry
+// that same license + credit. Same zone-generation code already used in OB Reversal,
+// copied unchanged rather than reinvented.
+//
+// !! KEEP THIS SCRIPT PRIVATE — NEVER PUBLISH IT !!
+//
+// ARCHITECTURE NOTE: zones are generated from whatever timeframe the chart is
+// showing (same as OB Reversal) — no simultaneous 1m + 5m zone tracking in one
+// script instance, since Pine's request.security() can't return mutable zone
+// state across a timeframe boundary. Add this twice (a 1-minute chart and a
+// 5-minute chart) to trade both.
+//
+// MERGED from OB Reversal, after Algo 2 standalone fired far too many trades per
+// session with no limiting mechanism at all:
+//   - Session cap (default 3 trades/session) — once hit, no NEW touch detection
+//     arms until the next session; anything already pending still fires.
+//   - Minimum block age filter — a block younger than N bars can't be touched yet,
+//     same "don't trade an unproven level" reasoning as OB Reversal.
+//   - One-bar confirmation delay — a valid rejection now ARMS on the touch bar and
+//     FIRES on the next bar's close ("take the next candle to make sure"), instead
+//     of entering same-bar. This is a deliberate override of the original Algo 2
+//     spec, which explicitly said same-bar entry — flag it if you want that back.
+//
+// UNCHANGED from Algo 2's own spec (the actual "zone tech" this script exists for):
+//   - First touch permanently consumes a zone regardless of outcome (rejection,
+//     invalidation, or no-target-available) — a zone never gets a second setup.
+//   - Wick-sensitive, tick-tolerant touch detection.
+//   - Close inside the zone = acceptance = invalid (no trade). Close outside =
+//     rejection = valid.
+//   - Stop = the zone's own opposite edge. Target = nearest still-valid opposing
+//     zone (zone-to-zone) — if none exists, the trade is skipped (zone still
+//     consumed) rather than inventing a fallback target.
+//
+// Contracts default to 4 for MNQ/MGC and 1 for HG. PickMyTrade relay: off by
+// default, real computed JSON via alert_message when enabled.
+
+//@version=5
+
+strategy("Theonexus - Algo 2 First-Touch Zones", overlay = true, default_qty_type = strategy.fixed,
+     default_qty_value = 1, calc_on_every_tick = false, process_orders_on_close = true,
+     initial_capital = 50000, currency = currency.USD)
+
+// ── Webhook config ──────────────────────────────────────────────────────────
+webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", title = "TradingView Webhook Secret", group = "Webhook")
+symbolChoice  = syminfo.root
+tickSize      = syminfo.mintick
+// Chart resolution this instance is running on (e.g. "1", "15", "D") — sent in every
+// alert so the backend can tell apart two instances of this same script on the same
+// instrument but different chart timeframes (e.g. a 1-min and a 15-min MNQ Algo 2),
+// which otherwise look identical on the wire.
+chartTimeframe = timeframe.period
+// Real dollar-per-tick value, same convention as the ORB Breakout script — needed
+// so the profit cap below can be expressed in real dollars instead of raw ticks.
+tickDollarValue = symbolChoice == "HG" ? 12.50 : symbolChoice == "MNQ" ? 0.50 : symbolChoice == "MES" ? 1.25 : 1.00
+
+// ── Contracts ──────────────────────────────────────────────────────────────
+// Lowered from 4 -> 2: at 4 contracts the worst losing stretch on real backtest
+// data (~24 days, Aug 2026) was -$2,042 -- basically the whole $2,000 max-drawdown
+// unit this project uses for a funded-style account, no margin left. At 2
+// contracts that same stretch is -$1,021, roughly half the unit, while keeping
+// net profit positive. Scale back up if you're trading this on a larger account
+// where a $2,000-ish stretch is comfortable (e.g. $150k+).
+mnqContracts = input.int(2, "MNQ Contracts", minval = 1, group = "Contracts")
+mgcContracts = input.int(4, "MGC Contracts", minval = 1, group = "Contracts")
+hgContracts  = input.int(1, "HG1 Contracts", minval = 1, group = "Contracts")
+// Same conservative default as MNQ (2, not 4) — MES is also an equity-index
+// contract and new to this pipeline, no live track record yet to justify sizing
+// it any more aggressively.
+mesContracts = input.int(2, "MES Contracts", minval = 1, group = "Contracts")
+contracts = symbolChoice == "MNQ" ? mnqContracts : symbolChoice == "MGC" ? mgcContracts : symbolChoice == "MES" ? mesContracts : hgContracts
+
+// ── PickMyTrade relay (optional, off by default) ──────────────────────────────
+pmtEnabled   = input.bool(false, "Relay real fills to PickMyTrade", group = "PickMyTrade")
+pmtToken     = input.string("", "PickMyTrade Token", group = "PickMyTrade")
+pmtAccountId = input.string("", "PickMyTrade Account ID", group = "PickMyTrade")
+pmtSymbol = symbolChoice == "MGC" ? "MGC1!" : symbolChoice == "HG" ? "HG1!" : symbolChoice == "MES" ? "MES1!" : "MNQ1!"
+
+f_pmtMessage(side, qty) =>
+    pmtEnabled ? '{"symbol":"' + pmtSymbol + '","data":"' + side + '","quantity":' + str.tostring(qty) + ',"token":"' + pmtToken + '","account_id":"' + pmtAccountId + '","order_type":"MKT"}' : ""
+
+// ── Session (labeling + the session cap below — this strategy still doesn't
+// gate WHEN it watches, only how many entries per session) ───────────────────
+ref_res = ""
+tmzn = input(defval = "GMT+7", title = "Timezone", group = "Session")
+tokyo    = input.session(defval = "0700-1600", title = "Tokyo Session", group = "Session")
+shanghai = input.session(defval = "0800-1500", title = "Shanghai Session", group = "Session")
+london   = input.session(defval = "1500-2340", title = "London Session", group = "Session")
+newyork  = input.session(defval = "2030-0400", title = "New York Session", group = "Session")
+
+TK = time(ref_res, tokyo, tmzn)
+SH = time(ref_res, shanghai, tmzn)
+LD = time(ref_res, london, tmzn)
+NY = time(ref_res, newyork, tmzn)
+bool tkActive = not na(TK)
+bool shActive = not na(SH)
+bool ldActive = not na(LD)
+currentSessionLabel = tkActive ? "TOKYO" : shActive ? "SHANGHAI" : ldActive ? "LONDON" : "NEW_YORK"
+
+open_bar(t) => na(t[1]) and not na(t) or t[1] < t ? 1 : 0
+bool tk_switch = ta.change(open_bar(TK)) > 0
+bool sh_switch = ta.change(open_bar(SH)) > 0
+bool ld_switch = ta.change(open_bar(LD)) > 0
+bool ny_switch = ta.change(open_bar(NY)) > 0
+bool anySessionSwitch = tk_switch or sh_switch or ld_switch or ny_switch
+
+get_minutes() =>
+    m =
+         timeframe.isseconds ? timeframe.multiplier / 60 :
+         timeframe.isintraday ? timeframe.multiplier :
+         timeframe.isdaily ? timeframe.multiplier * 1440 :
+         timeframe.isweekly ? timeframe.multiplier * 10080 :
+         timeframe.ismonthly ? timeframe.multiplier * 42800 :
+         na
+
+// ── Zone rules ────────────────────────────────────────────────────────────────
+zoneTouchTickTolerance = input.int(1, "Zone Touch Tick Tolerance", minval = 0, group = "Zone Rules")
+firstTouchOnly = input.bool(true, "First Touch Only (any interaction consumes the zone)", group = "Zone Rules")
+maxTradesPerZone = input.int(1, "Max Trades Per Zone", minval = 1, group = "Zone Rules")
+zoneToZoneTarget = input.bool(true, "Zone-to-Zone Target (skip trade if no opposing zone exists)", group = "Zone Rules")
+// The opposing zone is sometimes far enough away that a trade sits open past a
+// perfectly good profit waiting to "touch the next zone" — and gives it back on a
+// reversal before ever getting there. Cap the target so a trade closes once it
+// reaches this much floating profit, even if the zone-to-zone target is farther.
+// Does NOT stretch a target that's already closer than this — only pulls in ones
+// that were farther, never pushes a small target out to chase this number.
+profitCapUsd = input.float(0, "Cap target at this floating profit ($) if the zone-to-zone target is farther (0 = off)", minval = 0, group = "Zone Rules")
+
+// ── Session filter ───────────────────────────────────────────────────────────
+// A session turned off here never arms a NEW touch — anything already pending
+// from a still-enabled session still fires on schedule. Matches the same
+// "block new arming, don't abandon what's already pending" treatment the session
+// cap gets, and mirrors showTokyo/showShanghai/showLondon/showNewYork in the ORB
+// Breakout script, which already had this and this file didn't.
+enableTokyo    = input.bool(true, "Enable Tokyo", group = "Session Filter")
+enableShanghai = input.bool(true, "Enable Shanghai", group = "Session Filter")
+enableLondon   = input.bool(true, "Enable London", group = "Session Filter")
+enableNewYork  = input.bool(true, "Enable New York", group = "Session Filter")
+bool currentSessionEnabled = tkActive ? enableTokyo : shActive ? enableShanghai : ldActive ? enableLondon : enableNewYork
+// Merged in from OB Reversal — was firing far too many signals per session with
+// no limit at all.
+minAgeBars = input.int(3, "Minimum bars since block formed before trading it", minval = 0, group = "Zone Rules")
+maxTradesPerSession = input.int(3, "Max trades per session", minval = 1, group = "Zone Rules")
+var int tradesThisSession = 0
+if anySessionSwitch
+    tradesThisSession := 0
+bool sessionCapReached = tradesThisSession >= maxTradesPerSession
+minAgeMs = minAgeBars * get_minutes() * 60000
+
+// ── Order blocks (simplified port of "Price Action Toolkit Lite [UAlgo]", CC BY-NC-SA
+// 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/, © UAlgo) — UNCHANGED from
+// the OB Reversal script, per the "don't invent a new Order Block calculation" rule.
+obShow      = input.bool(true, "Show Order Blocks", group = "Order Blocks")
+obStructLen = input.int(9, "Order Block Structure Length", group = "Order Blocks")
+obKeepCount = input.int(2, "Order Blocks to Keep Visible", minval = 1, maxval = 10, group = "Order Blocks")
+
+type orderblock
+    float value
+    int barStart
+    int barEnd
+    box block
+    bool broken
+    int tradesTaken
+
+var array<orderblock> bullishOrderblock = array.new<orderblock>()  // Buy Blocks (support)
+var array<orderblock> bearishOrderblock = array.new<orderblock>()  // Sell Blocks (resistance)
+var array<int> obHighValIndex = array.new<int>()
+var array<int> obLowValIndex = array.new<int>()
+var array<float> obHighVal = array.new_float()
+var array<float> obLowVal = array.new_float()
+
+var bool obDrawUp = false
+var bool obDrawDown = false
+var int obTrend = 1
+
+obAtr = ta.atr(14)
+
+obToUp = high[obStructLen] >= ta.highest(high, obStructLen)
+obToDown = low[obStructLen] <= ta.lowest(low, obStructLen)
+obTrend := obTrend == 1 and obToDown ? -1 : obTrend == -1 and obToUp ? 1 : obTrend
+
+if ta.change(obTrend) != 0 and obTrend == 1
+    array.push(obHighValIndex, time[obStructLen])
+    array.push(obHighVal, high[obStructLen])
+    if array.size(obLowVal) > 1
+        obDrawUp := false
+
+if ta.change(obTrend) != 0 and obTrend == -1
+    array.push(obLowValIndex, time[obStructLen])
+    array.push(obLowVal, low[obStructLen])
+    if array.size(obHighVal) > 1
+        obDrawDown := false
+
+if array.size(obLowVal) > 1 and obDrawDown == false
+    if close < array.get(obLowVal, array.size(obLowVal) - 1)
+        obDrawDown := true
+        if obShow
+            orderblock newOb = orderblock.new()
+            float maxV = 0
+            int barT = na
+            for i = (time - array.get(obLowValIndex, array.size(obLowValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
+                if high[i] > maxV
+                    maxV := high[i]
+                    barT := time[i]
+            newOb.barStart := barT
+            newOb.barEnd := time
+            newOb.broken := false
+            newOb.tradesTaken := 0
+            newOb.value := maxV
+            newOb.block := box.new(left = newOb.barStart, top = newOb.value - obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.red, 80), border_width = 1, border_color = color.new(color.red, 80))
+            array.push(bearishOrderblock, newOb)
+            if array.size(bearishOrderblock) > 20
+                array.shift(bearishOrderblock)
+
+if array.size(obHighVal) > 1 and obDrawUp == false
+    if close > array.get(obHighVal, array.size(obHighVal) - 1)
+        obDrawUp := true
+        if obShow
+            orderblock newOb = orderblock.new()
+            float minV = 999999999
+            int barT = na
+            for i = (time - array.get(obHighValIndex, array.size(obHighValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
+                if low[i] < minV
+                    minV := low[i]
+                    barT := time[i]
+            newOb.barStart := barT
+            newOb.barEnd := time
+            newOb.broken := false
+            newOb.tradesTaken := 0
+            newOb.value := minV
+            newOb.block := box.new(left = newOb.barStart, top = newOb.value + obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.teal, 80), border_width = 1, border_color = color.new(color.teal, 80))
+            array.push(bullishOrderblock, newOb)
+            if array.size(bullishOrderblock) > 20
+                array.shift(bullishOrderblock)
+
+// Invalidate/remove order blocks once price closes back through them
+if array.size(bullishOrderblock) > 0
+    orderblock testOb = na
+    int obCounter = 0
+    for i = array.size(bullishOrderblock) - 1 to 0 by 1
+        testOb := array.get(bullishOrderblock, i)
+        if obCounter < obKeepCount
+            testOb.block.set_right(time)
+            if close < testOb.value
+                testOb.block.delete()
+                array.remove(bullishOrderblock, i)
+            obCounter := obCounter + 1
+        else
+            testOb.block.set_right(testOb.barStart)
+
+if array.size(bearishOrderblock) > 0
+    orderblock testOb2 = na
+    int obCounter2 = 0
+    for i = array.size(bearishOrderblock) - 1 to 0 by 1
+        testOb2 := array.get(bearishOrderblock, i)
+        if obCounter2 < obKeepCount
+            testOb2.block.set_right(time)
+            if close > testOb2.value
+                testOb2.block.delete()
+                array.remove(bearishOrderblock, i)
+            obCounter2 := obCounter2 + 1
+        else
+            testOb2.block.set_right(testOb2.barStart)
+
+// ── Touch detection (wick-sensitive, tick-tolerant, age-filtered) ────────────
+// Buy Block (bullish) spans [value, value+obAtr]. Sell Block (bearish) spans
+// [value-obAtr, value]. Tolerance widens the check outward by N ticks so a wick
+// that comes close but doesn't quite reach the boundary still counts. Blocks
+// younger than minAgeBars are skipped — an untested level, not a real retest.
+tol = zoneTouchTickTolerance * tickSize
+
+f_findTouchedBuyBlock() =>
+    orderblock matched = na
+    if array.size(bullishOrderblock) > 0
+        for i = array.size(bullishOrderblock) - 1 to 0 by 1
+            ob = array.get(bullishOrderblock, i)
+            float obTop = ob.value + obAtr
+            float obBottom = ob.value
+            bool eligible = (firstTouchOnly ? not ob.broken : ob.tradesTaken < maxTradesPerZone) and (time - ob.barEnd) >= minAgeMs
+            if na(matched) and eligible and low <= obTop + tol and high >= obBottom - tol
+                matched := ob
+    matched
+
+f_findTouchedSellBlock() =>
+    orderblock matched = na
+    if array.size(bearishOrderblock) > 0
+        for i = array.size(bearishOrderblock) - 1 to 0 by 1
+            ob = array.get(bearishOrderblock, i)
+            float obTop = ob.value
+            float obBottom = ob.value - obAtr
+            bool eligible = (firstTouchOnly ? not ob.broken : ob.tradesTaken < maxTradesPerZone) and (time - ob.barEnd) >= minAgeMs
+            if na(matched) and eligible and low <= obTop + tol and high >= obBottom - tol
+                matched := ob
+    matched
+
+// Nearest still-valid OPPOSING zone beyond a price, for zone-to-zone targeting.
+f_nearestBuyBlockBelow(px) =>
+    float nearest = na
+    if array.size(bullishOrderblock) > 0
+        for i = array.size(bullishOrderblock) - 1 to 0 by 1
+            ob = array.get(bullishOrderblock, i)
+            if ob.value < px and (na(nearest) or ob.value > nearest)
+                nearest := ob.value
+    nearest
+
+f_nearestSellBlockAbove(px) =>
+    float nearest = na
+    if array.size(bearishOrderblock) > 0
+        for i = array.size(bearishOrderblock) - 1 to 0 by 1
+            ob = array.get(bearishOrderblock, i)
+            if ob.value > px and (na(nearest) or ob.value < nearest)
+                nearest := ob.value
+    nearest
+
+// ── Entry/exit state ─────────────────────────────────────────────────────────
+var bool inLong = false
+var bool inShort = false
+var float stopPx = na
+var float targetPx = na
+
+// Confirmation state: a rejection ARMS on the touch bar, FIRES on the NEXT bar's
+// close — "take the next candle to make sure," merged in from OB Reversal.
+var orderblock pendingBuyBlock = na
+var orderblock pendingSellBlock = na
+
+// ── Normal target/stop exit ──────────────────────────────────────────────────
+if inLong and (high >= targetPx or low <= stopPx)
+    float exitPx = high >= targetPx ? targetPx : stopPx
+    strategy.close("Long", alert_message = f_pmtMessage("close", contracts))
+    alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+    inLong := false
+
+if inShort and (low <= targetPx or high >= stopPx)
+    float exitPx = low <= targetPx ? targetPx : stopPx
+    strategy.close("Short", alert_message = f_pmtMessage("close", contracts))
+    alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
+    inShort := false
+
+// ── 1) Fire an entry armed on the PRIOR bar — order matters, this is what makes
+// it a one-bar delay rather than same-bar ────────────────────────────────────
+if not na(pendingBuyBlock)
+    float target = f_nearestSellBlockAbove(close)
+    if not zoneToZoneTarget or not na(target)
+        float entryPx = close
+        float stop = pendingBuyBlock.value
+        inLong := true
+        stopPx := stop
+        targetPx := zoneToZoneTarget ? target : entryPx + (entryPx - stop)
+        if profitCapUsd > 0
+            float capDistance = (profitCapUsd / (tickDollarValue * contracts)) * tickSize
+            targetPx := math.min(targetPx, entryPx + capDistance)
+        pendingBuyBlock.tradesTaken := pendingBuyBlock.tradesTaken + 1
+        tradesThisSession := tradesThisSession + 1
+        strategy.entry("Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
+        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"LONG","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+    pendingBuyBlock := na
+
+if not na(pendingSellBlock)
+    float target = f_nearestBuyBlockBelow(close)
+    if not zoneToZoneTarget or not na(target)
+        float entryPx = close
+        float stop = pendingSellBlock.value
+        inShort := true
+        stopPx := stop
+        targetPx := zoneToZoneTarget ? target : entryPx - (stop - entryPx)
+        if profitCapUsd > 0
+            float capDistance = (profitCapUsd / (tickDollarValue * contracts)) * tickSize
+            targetPx := math.max(targetPx, entryPx - capDistance)
+        pendingSellBlock.tradesTaken := pendingSellBlock.tradesTaken + 1
+        tradesThisSession := tradesThisSession + 1
+        strategy.entry("Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
+        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"SHORT","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+    pendingSellBlock := na
+
+// ── 2) Detect a fresh touch to arm for the NEXT bar. Blocked once the per-
+// session cap is reached, or this session is disabled in Session Filter above —
+// an already-pending entry above still fires either way ──
+if not sessionCapReached and currentSessionEnabled and not inLong and not inShort and na(pendingBuyBlock) and na(pendingSellBlock)
+    touchedBuy = f_findTouchedBuyBlock()
+    touchedSell = f_findTouchedSellBlock()
+    // Nested `if`, not `and` — Pine evaluates both sides of `and` regardless of
+    // the first, so a na-guard followed by field access in the same `and` still
+    // crashes.
+    if not na(touchedBuy)
+        // Buy Block: close outside (above) it = rejection = valid setup, arm for
+        // next bar. Close inside = acceptance = invalid. Either way, first touch
+        // consumes the zone.
+        bool rejected = close > (touchedBuy.value + obAtr)
+        touchedBuy.broken := true
+        if rejected
+            pendingBuyBlock := touchedBuy
+    else if not na(touchedSell)
+        bool rejected = close < (touchedSell.value - obAtr)
+        touchedSell.broken := true
+        if rejected
+            pendingSellBlock := touchedSell
+
+// ── Chart markers ────────────────────────────────────────────────────────────
+plotshape(inLong and inLong[1] == false, title = "Long Entry", style = shape.labelup, location = location.belowbar, color = color.new(color.blue, 0), size = size.tiny, text = "BUY", textcolor = color.white)
+plotshape(inShort and inShort[1] == false, title = "Short Entry", style = shape.labeldown, location = location.abovebar, color = color.new(color.purple, 0), size = size.tiny, text = "SELL", textcolor = color.white)

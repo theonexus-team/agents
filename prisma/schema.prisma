@@ -1,0 +1,460 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum Session {
+  TOKYO
+  SHANGHAI
+  LONDON
+  NEW_YORK
+}
+
+enum Outcome {
+  HIT_TARGET
+  STOPPED_OUT
+  STOPPED_OUT_TARGET_HIT_LATER
+  CLOSED_AT_DAY_END
+  MANUAL_FLATTEN
+}
+
+enum InstrumentSymbol {
+  MGC
+  HG
+  MNQ
+  MES
+}
+
+model Instrument {
+  symbol           InstrumentSymbol @id
+  name             String
+  tradeable        Boolean          @default(true)
+  research         Boolean          @default(false)
+  paused           Boolean          @default(false)
+  riskPerTrade     Int              @default(150)
+  /// Dollar value of one tick move for a single contract (e.g. MGC=$1.00, HG=$12.50,
+  /// MNQ=$0.50). Used with tickSize + a trade's `contracts` to compute real dollar P&L
+  /// instead of the normalized riskPerTrade calc, when a trade specifies contracts.
+  tickValue        Decimal?
+  /// Price units per tick (e.g. MGC=0.10, HG=0.0005, MNQ=0.25).
+  tickSize         Decimal?
+  minAccounts      Int              @default(3)
+  maxAccounts      Int              @default(13)
+  currentAccounts  Int              @default(1)
+  baseUnitRisk     Int              @default(100)
+  liveTradesToward Int              @default(0)
+  gateTarget       Int              @default(60)
+  market           String?
+  deployed         Boolean          @default(false)
+
+  trades       Trade[]
+  positions    OpenPosition[]
+  signals      Signal[]
+  priceHealth  PriceHealth?
+}
+
+model Trade {
+  id                String     @id @default(cuid())
+  /// Null = the primary/legacy account (your own trading, keyed by the fleet-wide
+  /// TRADINGVIEW_WEBHOOK_SECRET). Set = a client account, keyed by that Account's own
+  /// webhookSecret — see Account below.
+  accountId         String?
+  account           Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol  InstrumentSymbol
+  instrument        Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction         Direction
+  session           Session
+  strategy          String
+  entryPrice        Decimal
+  exitPrice         Decimal
+  openedAt          DateTime
+  closedAt          DateTime
+  outcome           Outcome
+  worstPoint        Decimal
+  bestPoint         Decimal
+  net               Decimal
+  perDollarRisked   Decimal
+  /// Contract count, when the signal specified one. Present -> net computed from
+  /// real ticks-moved * instrument.tickValue * contracts. Absent -> falls back to
+  /// the normalized riskPerTrade calc (how the original ORB scalp signals work).
+  contracts         Int?
+  includedInRuleset Boolean    @default(true)
+  /// True only for a trade created via /api/execution/report (a real NinjaTrader
+  /// fill) — false for everything else, including every trade before this feature
+  /// existed. Lets a mixed real+paper period on the primary account be told apart.
+  liveExecution     Boolean    @default(false)
+  createdAt         DateTime   @default(now())
+
+  @@index([instrumentSymbol])
+  @@index([closedAt])
+  @@index([accountId])
+}
+
+model OpenPosition {
+  id               String     @id @default(cuid())
+  accountId        String?
+  account          Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol InstrumentSymbol
+  instrument       Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction        Direction
+  session          Session
+  strategy         String
+  entryPrice       Decimal
+  stopPrice        Decimal
+  targetPrice      Decimal
+  contracts        Int?
+  openedAt         DateTime   @default(now())
+  /// True only when this position exists because a real NinjaTrader fill was
+  /// reported via /api/execution/report — its exit MUST be queued as a real
+  /// ExecutionIntent too (there's a real position to flatten), not closed as a
+  /// normal paper trade off Pine's calculated exitPrice.
+  liveExecution    Boolean    @default(false)
+
+  @@index([accountId])
+}
+
+model Signal {
+  id               String     @id @default(cuid())
+  accountId        String?
+  account          Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol InstrumentSymbol
+  instrument       Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction        Direction
+  session          Session
+  strategy         String
+  entryPrice       Decimal
+  stopPrice        Decimal
+  targetPrice      Decimal
+  occurredAt       DateTime   @default(now())
+
+  @@index([accountId])
+}
+
+/// A separate client dashboard sharing this same app/domain/database, reached at
+/// /a/[accessToken] with its own webhook endpoint auth (webhookSecret, distinct from
+/// the primary TRADINGVIEW_WEBHOOK_SECRET), its own desk key, and its own balance/
+/// drawdown/daily-loss tracking. UNLIKE the earlier (reverted) multi-account attempt
+/// in .multi-account-wip/, this does NOT fan one shared signal out to every account —
+/// each account's webhookSecret routes ITS OWN incoming entries/exits to ITS OWN
+/// Trade/OpenPosition/Signal rows (accountId set), completely independent of the
+/// primary account's trades (accountId null). Built because a client needed their own
+/// dashboard fed by their own distinct TradingView webhook, not a mirrored copy of
+/// the primary signals.
+model Account {
+  id              String   @id @default(cuid())
+  name            String
+  /// Long random token used in this account's dashboard URL (/a/[accessToken]).
+  /// Deliberately opaque, not a slug — these pages show real dollar figures.
+  accessToken     String   @unique
+  /// This account's own webhook secret — the incoming {"secret": ...} value that
+  /// routes a signal to THIS account instead of the primary one or another account.
+  webhookSecret   String   @unique
+  /// Scoped desk key for this account only (pause/resume/flatten/ack its own account).
+  /// The main admin DESK_KEY env var also works on any account, on top of this.
+  deskKey         String
+  startingBalance Decimal  @default(50000)
+  /// Highest equity this account has ever reached — its own maxLossFromPeak trailing
+  /// drawdown is measured against this, not the starting balance.
+  peakEquity      Decimal  @default(50000)
+  maxLossFromPeak Decimal  @default(2000)
+  dailyLossLimit  Decimal  @default(1000)
+  maxLossBreached Boolean  @default(false)
+  globalPaused    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  trades        Trade[]
+  openPositions OpenPosition[]
+  signals       Signal[]
+}
+
+model PriceHealth {
+  instrumentSymbol InstrumentSymbol @id
+  instrument       Instrument       @relation(fields: [instrumentSymbol], references: [symbol])
+  lastPrice        Decimal
+  lastUpdatedAt    DateTime
+  crossCheckOk     Boolean          @default(true)
+}
+
+model EconomicEvent {
+  id         String   @id @default(cuid())
+  title      String
+  country    String
+  releaseAt  DateTime
+  tagged     Boolean  @default(false)
+}
+
+model EngineState {
+  id               String   @id @default("singleton")
+  reporterLastSeen DateTime @default(now())
+  globalPaused     Boolean  @default(false)
+  startingBalance  Decimal  @default(50000)
+  /// Highest account equity ever reached, tracked after every trade close. The
+  /// $2,000 max-loss rule is measured against THIS, not the starting balance —
+  /// it's a trailing drawdown, matching funded-account evaluation rules.
+  peakEquity       Decimal  @default(50000)
+  /// Set true the moment equity drops $2,000 below peakEquity. Distinct from
+  /// globalPaused (though breaching also sets globalPaused) so that a breach
+  /// can't be cleared by the ordinary Resume action — it needs its own
+  /// deliberate acknowledgment.
+  maxLossBreached  Boolean  @default(false)
+  /// When true, the primary/legacy webhook stops creating OpenPosition/Trade rows
+  /// directly from Pine's own numbers on entry/exit — it queues an ExecutionIntent
+  /// instead, for the local NinjaTrader watcher to act on. The dashboard's real
+  /// Trade/OpenPosition rows then only ever come from /api/execution/report (real
+  /// fills), not from Pine's calculated prices. Defaults false so nothing about
+  /// existing paper-trading behavior changes until this is deliberately flipped on.
+  liveExecutionMode Boolean @default(false)
+}
+
+/// A "please place/close this" instruction queued by the primary webhook when
+/// EngineState.liveExecutionMode is on, for the local NinjaTrader watcher to poll
+/// and act on (see ninjatrader-executor/). Deliberately NOT the thing that creates
+/// a dashboard-visible OpenPosition/Trade — that only happens once the watcher
+/// reports back a REAL fill via /api/execution/report. stopPrice/targetPrice/
+/// outcomeHint are Pine's own numbers, carried through as informational context
+/// for the watcher (e.g. so it knows roughly where to expect a fill), never treated
+/// as the authoritative trade record themselves.
+model ExecutionIntent {
+  id               String            @id @default(cuid())
+  action           String            // "entry" | "exit"
+  instrumentSymbol InstrumentSymbol
+  direction        Direction?
+  session          Session?
+  strategy         String?
+  stopPrice        Decimal?
+  targetPrice      Decimal?
+  contracts        Int?
+  outcomeHint      String?
+  createdAt        DateTime          @default(now())
+  /// Set the moment the watcher's poll picks this intent up, so a second poll
+  /// (before the first finishes placing/confirming the order) doesn't grab it again
+  /// and place a duplicate real order. GET /api/execution/pending also re-claims
+  /// anything claimed >2 minutes ago with no processedAt, in case the watcher
+  /// crashed mid-flight.
+  claimedAt        DateTime?
+  processedAt      DateTime?
+
+  @@index([processedAt])
+  @@index([claimedAt])
+}
+
+/// Tracks the async Apify ForexFactory actor run so the slow scrape (~10s+, over
+/// Vercel's Hobby 10s function cap) never blocks a request — kicked off and polled
+/// opportunistically from the dashboard route instead of a dedicated cron.
+model EconCalendarSync {
+  id            String    @id @default("singleton")
+  apifyRunId    String?
+  status        String    @default("idle") // idle | running | succeeded | failed
+  startedAt     DateTime?
+  lastSuccessAt DateTime?
+}
+
+model AdminCommand {
+  id        String   @id @default(cuid())
+  scope     String
+  action    String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  appliedAt DateTime?
+}
+
+enum BacktestMode {
+  HISTORICAL
+  FORWARD
+}
+
+/// One backtest or forward-test run of one strategy against one instrument, produced
+/// by the standalone Python engine in /backtest. Deliberately has no relation to
+/// Instrument/Trade/OpenPosition so it can't affect live trading queries or volume.
+model BacktestRun {
+  id               String           @id @default(cuid())
+  strategy         String
+  instrumentSymbol InstrumentSymbol
+  timeframe        String
+  mode             BacktestMode
+  dataStart        DateTime
+  dataEnd          DateTime
+  /// Exact parameter values used for this run (target ticks, stop distance, fill
+  /// tie-break mode, etc.), kept for reproducibility.
+  parameters       Json
+  /// Free-text attribution, e.g. "friend's algo #3" or a YouTube video title/URL.
+  sourceNote       String?
+  startingBalance  Decimal          @default(50000)
+  status           String           @default("completed") // running | completed | failed
+  createdAt        DateTime         @default(now())
+  completedAt      DateTime?
+
+  trades BacktestTrade[]
+
+  /// Set when this run is one leg of a multi-strategy PortfolioRun (e.g. "turtle_soup
+  /// on MNQ" as one of three legs sharing an account) rather than a standalone run.
+  portfolioRunId String?
+  portfolioRun   PortfolioRun? @relation(fields: [portfolioRunId], references: [id], onDelete: Cascade)
+
+  @@index([strategy])
+  @@index([instrumentSymbol])
+  @@index([mode])
+  @@index([portfolioRunId])
+}
+
+/// Several BacktestRun legs (different strategy/instrument combos) simulated
+/// TOGETHER on one shared account/equity curve — produced by
+/// backtest/engine/portfolio.py's PortfolioRunner, which runs every leg's bars in
+/// true chronological order so dynamic position sizing (sizingMode="dynamic") sees
+/// one live equity figure across all legs, not each leg sized in isolation. A
+/// PortfolioRun's own combined stats (net, max drawdown) are computed by merging
+/// its legs' BacktestTrade rows by closedAt at read time — nothing duplicated here.
+model PortfolioRun {
+  id              String   @id @default(cuid())
+  label           String
+  startingBalance Decimal  @default(50000)
+  /// The max-drawdown "unit" the dynamic ladder scales against (engine.position_sizing
+  /// .compute_scaled_contracts) — same $2,000 concept as src/lib/risk.ts's
+  /// MAX_LOSS_FROM_PEAK, configurable per run since a specific account/prop-firm rule
+  /// might use a different number.
+  maxLossFromPeak Decimal  @default(2000)
+  sizingMode      String   @default("dynamic") // "fixed" | "dynamic" — see engine/portfolio.py
+  sourceNote      String?
+  status          String   @default("completed") // running | completed | failed
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+
+  legs BacktestRun[]
+}
+
+enum KalshiSide {
+  YES
+  NO
+}
+
+enum KalshiOutcome {
+  TARGET_HIT
+  STOPPED_OUT
+  FORCED_FLAT
+  SETTLED
+  ERROR
+}
+
+/// A single Kalshi KXBTC15M trade placed by the standalone kalshi-trader/ Python bot.
+/// Deliberately NOT the same model as Trade: Kalshi contracts are binary, cents-priced
+/// (0.01-0.99, settling to $0 or $1) with linear PnL — no tick_size/tick_value concept,
+/// no InstrumentSymbol enum membership, so shoehorning this into Trade would corrupt
+/// both models' semantics.
+model KalshiTrade {
+  id             String         @id @default(cuid())
+  ticker         String
+  side           KalshiSide
+  strikePrice    Decimal
+  windowCloseAt  DateTime
+  entryPrice     Decimal
+  exitPrice      Decimal?
+  contracts      Int
+  stopPrice      Decimal
+  targetPrice    Decimal
+  status         String         @default("open") // open | closed
+  outcome        KalshiOutcome?
+  net            Decimal?
+  feesPaid       Decimal?
+  openedAt       DateTime       @default(now())
+  closedAt       DateTime?
+  btcSpotAtEntry Decimal?
+  strategy       String         @default("orb15_vwap")
+  /// True = fill/exit prices are simulated from live market quotes, no real order
+  /// was placed. Lets paper and real trades share one table/dashboard view.
+  isPaper        Boolean        @default(true)
+
+  @@index([openedAt])
+  @@index([closedAt])
+}
+
+model KalshiSignal {
+  id            String    @id @default(cuid())
+  direction     Direction
+  windowStart   DateTime
+  windowCloseAt DateTime
+  /// Null for strategies (e.g. algo2) without an opening-range/VWAP concept.
+  vwapValue     Decimal?
+  orHigh        Decimal?
+  orLow         Decimal?
+  fired         Boolean   @default(false)
+  blockedReason String?
+  occurredAt    DateTime  @default(now())
+  isPaper       Boolean   @default(true)
+  strategy      String    @default("orb15_vwap")
+
+  @@index([occurredAt])
+}
+
+/// Separate singleton from EngineState: no fixed contracts-per-account-ladder like
+/// the futures side, but does have its own proportional equity scaling (below) -
+/// stake grows/shrinks with cumulative P&L rather than a stepped drawdown ladder.
+model KalshiEngineState {
+  id               String   @id @default("singleton")
+  paused           Boolean  @default(false)
+  killSwitch       Boolean  @default(false)
+  killSwitchReason String?
+  botLastSeen      DateTime @default(now())
+  /// Base per-trade stake at startingBalance - actual stake used scales
+  /// proportionally as cumulative P&L moves equity away from startingBalance
+  /// (stakePerTrade / startingBalance stays constant as the ratio). See
+  /// execution/sizing.py's current_stake_usd().
+  stakePerTrade    Decimal  @default(12.50)
+  /// Virtual bankroll this is compounding against - not a real funded balance
+  /// while paperMode is true. Change this (and/or stakePerTrade) to reset the
+  /// baseline the scaling ratio anchors to.
+  startingBalance  Decimal  @default(10)
+  maxDailyLoss     Decimal  @default(50)
+  /// Blocks new entries once today's realized profit reaches this - "stop while
+  /// ahead" for the day, not a hard kill switch, so it auto-resets at the next
+  /// UTC day boundary with no manual acknowledgment needed (unlike maxDailyLoss's
+  /// killSwitch, which requires a deliberate ack since a loss cap means something
+  /// went wrong - hitting a profit target doesn't).
+  maxDailyProfit   Decimal  @default(100)
+  maxTradesPerDay  Int      @default(5)
+  /// Reported by the bot's own heartbeat when NOT in paper mode - Kalshi's actual
+  /// live balance, queried fresh rather than computed from startingBalance +
+  /// cumulative P&L, so a manual deposit/withdrawal outside the bot shows up here
+  /// automatically instead of the dashboard silently drifting from reality. Null
+  /// in paper mode (no real balance to report).
+  lastKnownBalance Decimal?
+  /// Reported by the bot itself each heartbeat (its own KALSHI_PAPER_MODE env var),
+  /// not set from the dashboard - this reflects what the running process is
+  /// actually doing, so the banner can't drift from reality.
+  paperMode        Boolean  @default(true)
+}
+
+/// Field-for-field mirror of Trade (minus the Instrument relation) so it maps onto the
+/// same TradeRow shape the dashboard already uses, and computeStats()/TradeLogTable
+/// work on backtest data with zero changes.
+model BacktestTrade {
+  id                String           @id @default(cuid())
+  runId             String
+  run               BacktestRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+  instrumentSymbol  InstrumentSymbol
+  direction         Direction
+  session           Session
+  strategy          String
+  entryPrice        Decimal
+  exitPrice         Decimal
+  openedAt          DateTime
+  closedAt          DateTime
+  outcome           Outcome
+  worstPoint        Decimal
+  bestPoint         Decimal
+  net               Decimal
+  perDollarRisked   Decimal
+  contracts         Int?
+  includedInRuleset Boolean          @default(true)
+  createdAt         DateTime         @default(now())
+
+  @@index([runId])
+  @@index([closedAt])
+}

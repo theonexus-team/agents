@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum Session {
+  TOKYO
+  SHANGHAI
+  LONDON
+  NEW_YORK
+}
+
+enum Outcome {
+  HIT_TARGET
+  STOPPED_OUT
+  STOPPED_OUT_TARGET_HIT_LATER
+  CLOSED_AT_DAY_END
+  MANUAL_FLATTEN
+}
+
+enum InstrumentSymbol {
+  MGC
+  HG
+  MNQ
+}
+
+model Instrument {
+  symbol           InstrumentSymbol @id
+  name             String
+  tradeable        Boolean          @default(true)
+  research         Boolean          @default(false)
+  paused           Boolean          @default(false)
+  riskPerTrade     Int              @default(150)
+  /// Dollar value of one tick move for a single contract (e.g. MGC=$1.00, HG=$12.50,
+  /// MNQ=$0.50). Used with tickSize + a trade's `contracts` to compute real dollar P&L
+  /// instead of the normalized riskPerTrade calc, when a trade specifies contracts.
+  tickValue        Decimal?
+  /// Price units per tick (e.g. MGC=0.10, HG=0.0005, MNQ=0.25).
+  tickSize         Decimal?
+  minAccounts      Int              @default(3)
+  maxAccounts      Int              @default(13)
+  currentAccounts  Int              @default(1)
+  baseUnitRisk     Int              @default(100)
+  liveTradesToward Int              @default(0)
+  gateTarget       Int              @default(60)
+  market           String?
+  deployed         Boolean          @default(false)
+
+  trades       Trade[]
+  positions    OpenPosition[]
+  signals      Signal[]
+  priceHealth  PriceHealth?
+}
+
+model Trade {
+  id                String     @id @default(cuid())
+  accountId         String?
+  account           Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol  InstrumentSymbol
+  instrument        Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction         Direction
+  session           Session
+  strategy          String
+  entryPrice        Decimal
+  exitPrice         Decimal
+  openedAt          DateTime
+  closedAt          DateTime
+  outcome           Outcome
+  worstPoint        Decimal
+  bestPoint         Decimal
+  net               Decimal
+  perDollarRisked   Decimal
+  /// Contract count, when the signal specified one. Present -> net computed from
+  /// real ticks-moved * instrument.tickValue * contracts. Absent -> falls back to
+  /// the normalized riskPerTrade calc (how the original ORB scalp signals work).
+  contracts         Int?
+  includedInRuleset Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+
+  @@index([instrumentSymbol])
+  @@index([closedAt])
+  @@index([accountId])
+}
+
+model OpenPosition {
+  id               String     @id @default(cuid())
+  accountId        String?
+  account          Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol InstrumentSymbol
+  instrument       Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction        Direction
+  session          Session
+  strategy         String
+  entryPrice       Decimal
+  stopPrice        Decimal
+  targetPrice      Decimal
+  contracts        Int?
+  openedAt         DateTime   @default(now())
+
+  @@index([accountId])
+}
+
+model Signal {
+  id               String     @id @default(cuid())
+  accountId        String?
+  account          Account?   @relation(fields: [accountId], references: [id])
+  instrumentSymbol InstrumentSymbol
+  instrument       Instrument @relation(fields: [instrumentSymbol], references: [symbol])
+  direction        Direction
+  session          Session
+  strategy         String
+  entryPrice       Decimal
+  stopPrice        Decimal
+  targetPrice      Decimal
+  occurredAt       DateTime   @default(now())
+
+  @@index([accountId])
+}
+
+/// One account per person with access to a dashboard view — you (isPrimary) plus
+/// any friend/client accounts. Every account tracks its own balance/drawdown/
+/// position-sizing independently even though all of them mirror the SAME
+/// underlying webhook signals; the webhook fans each entry/exit out across every
+/// account, computing that account's own contract count and dollar P&L. Reached at
+/// /a/[accessToken] (a long random token, not a guessable name) for anyone besides
+/// the primary account, which stays at the root URL.
+model Account {
+  id              String   @id @default(cuid())
+  name            String
+  /// Long random token used in the account's dashboard URL (/a/[accessToken]).
+  /// Deliberately opaque, not a slug — these pages show real dollar figures.
+  accessToken     String   @unique
+  /// Scoped desk key for this account only (pause/resume/flatten its own account).
+  /// The main admin DESK_KEY env var also works on any account, on top of this.
+  deskKey         String
+  isPrimary       Boolean  @default(false)
+  startingBalance Decimal  @default(50000)
+  /// Highest equity this account has ever reached — the $2,000 (or whatever this
+  /// account's maxLossFromPeak is configured as) trailing drawdown is measured
+  /// against this, not the starting balance.
+  peakEquity      Decimal  @default(50000)
+  maxLossFromPeak Decimal  @default(2000)
+  dailyLossLimit  Decimal  @default(1000)
+  maxLossBreached Boolean  @default(false)
+  globalPaused    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  trades        Trade[]
+  openPositions OpenPosition[]
+  signals       Signal[]
+}
+
+model PriceHealth {
+  instrumentSymbol InstrumentSymbol @id
+  instrument       Instrument       @relation(fields: [instrumentSymbol], references: [symbol])
+  lastPrice        Decimal
+  lastUpdatedAt    DateTime
+  crossCheckOk     Boolean          @default(true)
+}
+
+model EconomicEvent {
+  id         String   @id @default(cuid())
+  title      String
+  country    String
+  releaseAt  DateTime
+  tagged     Boolean  @default(false)
+}
+
+/// Fleet-wide heartbeat only now — per-account balance/drawdown/pause state lives
+/// on Account instead, since those needed to be tracked independently per account.
+model EngineState {
+  id               String   @id @default("singleton")
+  reporterLastSeen DateTime @default(now())
+}
+
+/// Tracks the async Apify ForexFactory actor run so the slow scrape (~10s+, over
+/// Vercel's Hobby 10s function cap) never blocks a request — kicked off and polled
+/// opportunistically from the dashboard route instead of a dedicated cron.
+model EconCalendarSync {
+  id            String    @id @default("singleton")
+  apifyRunId    String?
+  status        String    @default("idle") // idle | running | succeeded | failed
+  startedAt     DateTime?
+  lastSuccessAt DateTime?
+}
+
+model AdminCommand {
+  id        String   @id @default(cuid())
+  scope     String
+  action    String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  appliedAt DateTime?
+}

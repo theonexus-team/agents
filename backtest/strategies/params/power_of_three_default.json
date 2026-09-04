@@ -1,0 +1,5 @@
+{
+  "range_lookback_bars": 20,
+  "range_atr_multiple": 4,
+  "max_trades_per_session": 3
+}

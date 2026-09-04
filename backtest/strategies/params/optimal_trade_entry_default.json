@@ -1,0 +1,6 @@
+{
+  "swing_lookback": 3,
+  "fib_shallow": 0.618,
+  "fib_deep": 0.786,
+  "max_trades_per_session": 3
+}
