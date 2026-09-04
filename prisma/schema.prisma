@@ -576,3 +576,25 @@ model AgentMessage {
   @@index([agent])
   @@index([replyToId])
 }
+
+/// Persistent, accumulated lessons — the actual "getting smarter over time" piece
+/// (user's explicit goal, 2026-09-04), distinct from AgentMessage's chronological
+/// log: this is a standing rule set agents read BEFORE acting, not a feed to skim.
+/// A mistake recorded here shouldn't get silently re-made by a future run. `active`
+/// lets a lesson be superseded (e.g. a better-calibrated fix) without losing the
+/// history of what was tried. `agent` is who it's MOST relevant to, but nothing
+/// stops any agent from reading the full set — see getActiveLearnings().
+model AgentLearning {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  /// "risk-watchdog" | "trading-analyst" | "instrument-scout" | "shared" (applies broadly)
+  agent     String
+  /// Short free-text category for grouping on the page — "sizing", "data-quality",
+  /// "methodology", etc. Not an enum on purpose; the taxonomy will grow organically.
+  category  String
+  lesson    String   @db.Text
+  active    Boolean  @default(true)
+
+  @@index([agent])
+  @@index([active])
+}

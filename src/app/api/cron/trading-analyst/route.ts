@@ -6,6 +6,7 @@ import { STRATEGY_SESSION_ALLOWLIST } from "@/lib/allowlist";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK } from "@/lib/risk";
 import { sendPushToAll } from "@/lib/push";
 import { getRecentBoardMessages, formatBoardForPrompt, postToBoard, getLatestFrom } from "@/lib/agentBoard";
+import { getActiveLearnings, formatLearningsForPrompt } from "@/lib/agentLearnings";
 
 /**
  * Automated performance-review pipeline. Vercel Cron triggers this on a schedule
@@ -117,6 +118,7 @@ export async function GET(req: NextRequest) {
   }
 
   const comboStats = computeComboStats(trades);
+  const analystLearnings = await getActiveLearnings("trading-analyst");
 
   const analystSystem =
     "You are the performance analyst for a live futures trading strategy allowlist. " +
@@ -125,7 +127,10 @@ export async function GET(req: NextRequest) {
     "Identify any combo whose live performance clearly diverges from what would justify keeping it on the allowlist " +
     "(persistently negative net, or a win rate that has collapsed) — but only if the sample size for that combo is " +
     "large enough to trust (treat anything under 6 trades as too early to call). If nothing crosses that bar, say so " +
-    "plainly and recommend no change. Be concise and concrete — name exact combos, not vague trends.";
+    "plainly and recommend no change. Be concise and concrete — name exact combos, not vague trends. " +
+    "You also have a standing set of lessons learned from past runs and other agents — apply them, don't re-derive " +
+    "something already known:\n" +
+    formatLearningsForPrompt(analystLearnings);
   const analystUser = `CURRENT ALLOWLIST:\n${formatAllowlist()}\n\nPERFORMANCE THIS WINDOW (${trades.length} trades, ${windowStart.toISOString()} to ${windowEnd.toISOString()}):\n${formatComboStats(comboStats)}`;
 
   let analystFinding = await callLlm(analystSystem, analystUser);
@@ -141,10 +146,11 @@ export async function GET(req: NextRequest) {
   // now?), not just the fixed dollar limits, plus recent board activity generally.
   // getLatestFrom (not just the live-status table) so the reply can thread to the
   // actual post Risk Watchdog made, not just reference its data silently.
-  const [liveRiskStatus, boardHistory, latestRiskWatchdogPost] = await Promise.all([
+  const [liveRiskStatus, boardHistory, latestRiskWatchdogPost, riskManagerLearnings] = await Promise.all([
     prisma.riskWatchdogStatus.findUnique({ where: { id: "singleton" } }),
     getRecentBoardMessages(10),
     getLatestFrom("risk-watchdog"),
+    getActiveLearnings("trading-analyst"),
   ]);
   const liveRiskLine = liveRiskStatus
     ? `Risk Watchdog's current live status: ${liveRiskStatus.level} — ${liveRiskStatus.message}`
@@ -159,6 +165,8 @@ export async function GET(req: NextRequest) {
     "is already under strain per the live risk status above). Address the Analyst directly (\"@Analyst, ...\") and, " +
     "if you're leaning on Risk Watchdog's status, say so explicitly (\"@Risk-Watchdog reports...\") — this is a " +
     "conversation between named agents, not an isolated verdict. " +
+    "You also have a standing set of lessons learned from past runs — apply them:\n" +
+    formatLearningsForPrompt(riskManagerLearnings) + "\n" +
     "Start your response with either 'APPROVE:' or 'OBJECT:' followed by your reasoning.";
   const riskUser = `${analystFinding}\n\nRecent activity from other agents:\n${formatBoardForPrompt(boardHistory)}`;
 
