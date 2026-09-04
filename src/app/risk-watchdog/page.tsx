@@ -20,6 +20,13 @@ type Status = {
 
 type Alert = { id: string; createdAt: string; level: string; message: string };
 
+type EconCalendar = {
+  lastSuccessAt: string | null;
+  syncStatus: string;
+  staleHours: number | null;
+  stale: boolean;
+};
+
 const LEVEL_COLOR: Record<string, string> = {
   OK: "text-accent",
   WARNING: "text-warn",
@@ -31,6 +38,7 @@ export default function RiskWatchdogPage() {
   const [status, setStatus] = useState<Status | null | undefined>(undefined);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [econCalendar, setEconCalendar] = useState<EconCalendar | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(DESK_KEY_STORAGE_KEY);
@@ -54,9 +62,10 @@ export default function RiskWatchdogPage() {
         setError(res.status === 401 ? "invalid desk key" : `HTTP ${res.status}`);
         return;
       }
-      const json = (await res.json()) as { status: Status | null; alerts: Alert[] };
+      const json = (await res.json()) as { status: Status | null; alerts: Alert[]; econCalendar: EconCalendar };
       setStatus(json.status);
       setAlerts(json.alerts);
+      setEconCalendar(json.econCalendar);
     } catch {
       setError("failed to load");
     }
@@ -132,6 +141,22 @@ export default function RiskWatchdogPage() {
           </ul>
         )}
       </Panel>
+
+      {econCalendar && (
+        <Panel
+          title="Econ Calendar Sync"
+          subtitle="Feeds the news blackout check — used to only refresh when someone had the main dashboard open, now also driven by this cron"
+          className={econCalendar.stale ? "border-warn/60" : ""}
+        >
+          <p className={`text-sm ${econCalendar.stale ? "text-warn" : "text-accent"}`}>
+            {econCalendar.stale ? "STALE" : "Fresh"} — last synced{" "}
+            {econCalendar.lastSuccessAt ? fmtDateTime(econCalendar.lastSuccessAt) : "never"}
+            {econCalendar.staleHours !== null && ` (${econCalendar.staleHours.toFixed(1)}h ago)`}
+            {" · sync status: "}
+            {econCalendar.syncStatus}
+          </p>
+        </Panel>
+      )}
     </main>
   );
 }
