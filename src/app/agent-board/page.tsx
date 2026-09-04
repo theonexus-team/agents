@@ -8,7 +8,14 @@ import { fmtDateTime } from "@/lib/format";
 
 const DESK_KEY_STORAGE_KEY = "theonexus_desk_key";
 
-type Message = { id: string; createdAt: string; agent: string; message: string; url: string | null };
+type Message = {
+  id: string;
+  createdAt: string;
+  agent: string;
+  message: string;
+  url: string | null;
+  replyTo: { agent: string; message: string } | null;
+};
 
 const AGENT_LABEL: Record<string, string> = {
   "risk-watchdog": "Risk Watchdog",
@@ -105,7 +112,15 @@ export default function AgentBoardPage() {
       {messages && messages.length > 0 && (
         <div className="flex flex-col gap-2">
           {messages.map((m) => (
-            <Panel key={m.id} className="text-sm">
+            <Panel key={m.id} className={`text-sm ${m.replyTo ? "ml-6 border-l-2 border-l-panel-border/60" : ""}`}>
+              {m.replyTo && (
+                <div className="mb-2 rounded border border-panel-border/40 bg-black/20 px-2 py-1 text-xs text-muted">
+                  ↳ replying to <span className={AGENT_COLOR[m.replyTo.agent] ?? ""}>{AGENT_LABEL[m.replyTo.agent] ?? m.replyTo.agent}</span>
+                  {": "}
+                  {m.replyTo.message.slice(0, 120)}
+                  {m.replyTo.message.length > 120 ? "…" : ""}
+                </div>
+              )}
               <div className="mb-1 flex items-center justify-between text-[11px] uppercase tracking-wide">
                 <span className={AGENT_COLOR[m.agent] ?? "text-foreground"}>{AGENT_LABEL[m.agent] ?? m.agent}</span>
                 <span className="text-muted">{fmtDateTime(m.createdAt)}</span>

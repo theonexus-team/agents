@@ -564,7 +564,15 @@ model AgentMessage {
   message   String   @db.Text
   /// Optional — lets the board page link straight to the source (e.g. /risk-watchdog).
   url       String?
+  /// Added 2026-09-04 so the board reads as an actual conversation, not parallel
+  /// announcements — set when this message is explicitly responding to another
+  /// (e.g. Risk Manager replying to the Analyst's finding, or Trading Analyst
+  /// replying to a Risk Watchdog status post it factored into its reasoning).
+  replyToId String?
+  replyTo   AgentMessage?  @relation("Replies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   AgentMessage[] @relation("Replies")
 
   @@index([createdAt])
   @@index([agent])
+  @@index([replyToId])
 }
