@@ -26,10 +26,10 @@
 // filter that used to do that job — the order-block bounce override still works
 // exactly as before, just overriding VWAP now instead of the EMA read. Session
 // re-entry is gone: hard one-trade-per-session cap, matching the 3-candle spec.
-// Stops stay order-block-based; the target is dollar-based (minProfitUsd, see
-// "Webhook" inputs) rather than a fixed tick count — this script's existing
-// strengths, kept rather than replaced with the simpler opposite-side-of-ORB
-// stop / R:R target the 3-candle version used standalone.
+// The target is dollar-based (minProfitUsd, see "Webhook" inputs) rather than a
+// fixed tick count. Stops were order-block-based until 2026-09-04, when they were
+// replaced by a fixed $-risk distance plus an active trailing stop — see "Scalp
+// Mode" inputs below for the current stop/sizing scheme.
 //
 // STRATEGY: 1-min opening-range breakout across Tokyo/Shanghai/London/New York
 // sessions. Opening range = the first real 1-minute candle of each session,
@@ -50,9 +50,9 @@
 // from the chart (syminfo.root / syminfo.mintick) — there are no manual per-instrument
 // fields to forget to update.
 //
-// Sizes contracts the same way OB Reversal does (4 for MGC/MNQ, 1 for HG, picked
-// automatically from the chart's instrument) and sends that in the entry alert, so the
-// dashboard computes real ticks * tick value * contracts P&L.
+// Contracts are fixed (Scalp Mode's fixedContracts input, default 8) rather than
+// picked per-instrument, and sent in the entry alert so the dashboard computes
+// real ticks * tick value * contracts P&L.
 //
 // One open position per instrument at a time, enforced by the dashboard's webhook —
 // this script and the OB Reversal script can't both hold a position on the same
@@ -65,10 +65,11 @@
 // of entry firing (candle 3, or the reversal-confirmation candle), not at the
 // original breakout candle. Toggleable under "Order Blocks".
 //
-// The `contracts` value sent to the DASHBOARD webhook (orbContracts, fixed at 4 or 1)
-// is only a BASELINE — the dashboard's own webhook overrides it for MGC/MNQ with a
-// live risk-scaled count. The PickMyTrade relay below uses this same baseline count
-// directly (real execution doesn't get the dashboard's post-hoc scaling).
+// The `contracts` value sent to the DASHBOARD webhook (fixedContracts) is used
+// AS-IS as of 2026-09-04 — the dashboard no longer overrides it with a dynamic
+// risk-scaled count for this account (it used to; that's now in direct conflict
+// with Pine deliberately choosing its own fixed size). The PickMyTrade relay below
+// uses this same count directly, same as always.
 
 //@version=5
 
@@ -108,6 +109,11 @@ maxStopUsd           = input.float(300, "Max stop-loss risk ($) at Fixed Contrac
 trailBufferTicks     = input.int(2, "Trail buffer (ticks behind wick) below the tighten threshold", minval = 0, group = "Scalp Mode")
 tightTrailBufferTicks = input.int(1, "Tighter trail buffer (ticks) once profit clears the threshold", minval = 0, group = "Scalp Mode")
 tightenAtProfitUsd   = input.float(150, "Switch to the tighter trail once floating profit reaches this ($)", group = "Scalp Mode")
+// Trailing every single bar proved too aggressive against real backtest data on
+// the traded instruments (2026-09-04) — normal bar-to-bar noise was tightening
+// the stop faster than the trade had room to develop. Skipping bars gives it more
+// breathing room; 2 = "every other candle" per the user's own fix for this.
+trailEveryNBars      = input.int(2, "Only re-check the trail every N bars (2 = every other candle)", minval = 1, group = "Scalp Mode")
 sessionProfitCapUsd  = input.float(350, "Stop new entries once THIS SESSION's realized profit reaches this ($)", group = "Scalp Mode")
 sitOutAfterLoss      = input.bool(true, "Stop new entries for the rest of the session after any losing trade", group = "Scalp Mode")
 // Ticks needed to cap risk at maxStopUsd for fixedContracts, e.g. $300 / (8 * $0.50)
@@ -433,7 +439,7 @@ bool vwapOkShort = vwapBiasShort or bearBounceRecent
 // candle if VWAP (or a fresh order-block bounce) allows it. One trade max per
 // session; each session uses its own strategy.entry()/close() order id so the
 // four sessions can never collide with each other.
-f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk, secret, enabled, entryCutoffMin, flatMin, contracts, blockIfInsideOb, stopTk, tickDollarVal, trailBufTk, tightTrailBufTk, tightenAtUsd, sessionCapUsd, sitOutAfterLossFlag) =>
+f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk, secret, enabled, entryCutoffMin, flatMin, contracts, blockIfInsideOb, stopTk, tickDollarVal, trailBufTk, tightTrailBufTk, tightenAtUsd, sessionCapUsd, sitOutAfterLossFlag, trailEveryN) =>
     var bool tradeTaken = false
     var int breakoutDir = 0
     var int barsSinceBreakout = na
@@ -445,6 +451,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
     var float entryPx = na
     var float sessionOpenTime = na
     var float entryTime = na
+    var int entryBarIndex = na
     var float sessionRealizedUsd = 0.0
     var bool sessionHadLoss = false
 
@@ -470,19 +477,27 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
     int minutesSinceEntry = na(entryTime) ? na : int((time - entryTime) / 60000)
     bool pastFlatTime = not na(minutesSinceEntry) and minutesSinceEntry >= flatMin
 
-    // ── Trailing stop: ratchets toward the current bar's wick EVERY bar while a
-    // position is open, tightening once floating profit clears tightenAtUsd. Only
-    // ever moves in the trade's favor (candidateStop is discarded if it would
-    // loosen the stop) — this is what usually closes a winner, not the fixed
-    // target below, which is really just the worst-case cap if price runs
-    // straight through with no pullback to trail against.
-    if inLong
+    // ── Trailing stop: ratchets toward the wick of whichever bar the trail last
+    // re-checked, tightening once floating profit clears tightenAtUsd. Only ever
+    // moves in the trade's favor (candidateStop is discarded if it would loosen
+    // the stop) — this is what usually closes a winner, not the fixed target
+    // below, which is really just the worst-case cap if price runs straight
+    // through with no pullback to trail against.
+    //
+    // Re-checked only every trailEveryN bars (default 2 = "every other candle"),
+    // not every single bar — trailing every bar proved too aggressive against
+    // real backtest data on the traded instruments (2026-09-04): normal bar-to-
+    // bar noise was tightening the stop faster than the trade had room to
+    // develop. bar_index is absolute, so this is stable regardless of when the
+    // trade opened.
+    bool trailDue = na(entryBarIndex) or (bar_index - entryBarIndex) % trailEveryN == 0
+    if inLong and trailDue
         float unrealizedUsd = (close - entryPx) / tickSz * tickDollarVal * contracts
         float bufTicks = unrealizedUsd >= tightenAtUsd ? tightTrailBufTk : trailBufTk
         float candidateStop = low - bufTicks * tickSz
         if candidateStop > stopPx
             stopPx := candidateStop
-    if inShort
+    if inShort and trailDue
         float unrealizedUsd = (entryPx - close) / tickSz * tickDollarVal * contracts
         float bufTicks = unrealizedUsd >= tightenAtUsd ? tightTrailBufTk : trailBufTk
         float candidateStop = high + bufTicks * tickSz
@@ -554,6 +569,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                     inLong := true
                     entryPx := entryPxC
                     entryTime := time
+                    entryBarIndex := bar_index
                     stopPx := stop
                     targetPx := target
                     strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
@@ -563,6 +579,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                     inShort := true
                     entryPx := entryPxC
                     entryTime := time
+                    entryBarIndex := bar_index
                     stopPx := stop
                     targetPx := target
                     strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
@@ -591,6 +608,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inLong := true
                             entryPx := entryPxR
                             entryTime := time
+                    entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
@@ -600,6 +618,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inShort := true
                             entryPx := entryPxR
                             entryTime := time
+                    entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
@@ -623,6 +642,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inLong := true
                             entryPx := entryPxR
                             entryTime := time
+                    entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
@@ -632,6 +652,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inShort := true
                             entryPx := entryPxR
                             entryTime := time
+                    entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
@@ -649,10 +670,10 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
 
     [longBreak, shortBreak]
 
-[tkLong, tkShort] = f_manageBreakout(tk_switch, tk_open_high, tk_open_low, "TOKYO",    symbolChoice, tickSize, targetTicks, webhookSecret, showTokyo,    breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
-[shLong, shShort] = f_manageBreakout(sh_switch, sh_open_high, sh_open_low, "SHANGHAI", symbolChoice, tickSize, targetTicks, webhookSecret, showShanghai, breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
-[ldLong, ldShort] = f_manageBreakout(ld_switch, ld_open_high, ld_open_low, "LONDON",   symbolChoice, tickSize, targetTicks, webhookSecret, showLondon,   breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
-[nyLong, nyShort] = f_manageBreakout(ny_switch, ny_open_high, ny_open_low, "NEW_YORK", symbolChoice, tickSize, targetTicks, webhookSecret, showNewYork,  breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
+[tkLong, tkShort] = f_manageBreakout(tk_switch, tk_open_high, tk_open_low, "TOKYO",    symbolChoice, tickSize, targetTicks, webhookSecret, showTokyo,    breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss, trailEveryNBars)
+[shLong, shShort] = f_manageBreakout(sh_switch, sh_open_high, sh_open_low, "SHANGHAI", symbolChoice, tickSize, targetTicks, webhookSecret, showShanghai, breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss, trailEveryNBars)
+[ldLong, ldShort] = f_manageBreakout(ld_switch, ld_open_high, ld_open_low, "LONDON",   symbolChoice, tickSize, targetTicks, webhookSecret, showLondon,   breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss, trailEveryNBars)
+[nyLong, nyShort] = f_manageBreakout(ny_switch, ny_open_high, ny_open_low, "NEW_YORK", symbolChoice, tickSize, targetTicks, webhookSecret, showNewYork,  breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss, trailEveryNBars)
 
 // ── Chart BUY/SELL markers ───────────────────────────────────────────────────
 anyLongEntry  = tkLong or shLong or ldLong or nyLong
