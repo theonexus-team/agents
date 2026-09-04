@@ -125,8 +125,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const lastRun = await prisma.analystRun.findFirst({ orderBy: { createdAt: "desc" } });
-  const windowStart = lastRun?.windowEnd ?? ALLOWLIST_LIVE_SINCE;
+  // Only a run that actually evaluated trades (enough data to call the LLM, whether
+  // or not it ended up proposing a change) advances the window. An insufficient-
+  // data run must NOT count as "last run" here — otherwise its trades get siloed
+  // into a dead-end window and never combine with the next day's to reach the
+  // threshold. Bug found 2026-09-04 (user asked "if a day doesn't return 6 trades
+  // does it start over the next day?") — previously ANY run, including
+  // insufficient-data ones, advanced windowEnd, so an account doing e.g. 5 trades/
+  // day forever would never get reviewed at all.
+  const lastEvaluatedRun = await prisma.analystRun.findFirst({
+    where: { status: { not: "INSUFFICIENT_DATA" } },
+    orderBy: { createdAt: "desc" },
+  });
+  const windowStart = lastEvaluatedRun?.windowEnd ?? ALLOWLIST_LIVE_SINCE;
   const windowEnd = new Date();
 
   const trades = await prisma.trade.findMany({
@@ -136,18 +147,22 @@ export async function GET(req: NextRequest) {
   });
 
   if (trades.length < MIN_TRADES_FOR_PROPOSAL) {
+    // windowEnd is set to `now` here purely for this row's own record of when the
+    // check happened — it is NEVER read back as a future windowStart (see the
+    // status filter above), so the accumulation window keeps growing day over day
+    // until enough trades land, instead of resetting and losing today's trades.
     const run = await prisma.analystRun.create({
       data: {
         windowStart,
         windowEnd,
         tradesInWindow: trades.length,
-        analystFinding: `Only ${trades.length} trade(s) closed in this window — below the ${MIN_TRADES_FOR_PROPOSAL}-trade minimum to evaluate anything. No LLM calls made. Waiting for more data.`,
+        analystFinding: `Only ${trades.length} trade(s) closed since the last evaluated window — below the ${MIN_TRADES_FOR_PROPOSAL}-trade minimum. No LLM calls made. These trades are NOT discarded — the next run will include them plus whatever closes before then.`,
         riskVerdict: "n/a — analyst did not propose a change",
         proposedDiff: null,
-        status: "NO_ACTION",
+        status: "INSUFFICIENT_DATA",
       },
     });
-    return NextResponse.json({ ok: true, status: "NO_ACTION", reason: "insufficient sample size", runId: run.id });
+    return NextResponse.json({ ok: true, status: "INSUFFICIENT_DATA", reason: "insufficient sample size", runId: run.id });
   }
 
   const comboStats = computeComboStats(trades);
