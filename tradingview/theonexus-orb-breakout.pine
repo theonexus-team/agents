@@ -608,7 +608,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inLong := true
                             entryPx := entryPxR
                             entryTime := time
-                    entryBarIndex := bar_index
+                            entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
@@ -618,7 +618,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inShort := true
                             entryPx := entryPxR
                             entryTime := time
-                    entryBarIndex := bar_index
+                            entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
@@ -642,7 +642,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inLong := true
                             entryPx := entryPxR
                             entryTime := time
-                    entryBarIndex := bar_index
+                            entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
@@ -652,7 +652,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                             inShort := true
                             entryPx := entryPxR
                             entryTime := time
-                    entryBarIndex := bar_index
+                            entryBarIndex := bar_index
                             stopPx := stop
                             targetPx := target
                             strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
