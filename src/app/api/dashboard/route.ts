@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { num } from "@/lib/serialize";
 import { computeStats, peakBalance } from "@/lib/stats";
 import { allNextOpens } from "@/lib/sessions";
-import { advanceEconCalendarSync } from "@/lib/providers/apify-forexfactory";
+import { syncEconCalendarFromFinnhub } from "@/lib/providers/finnhub";
 import { getLiveQuotes } from "@/lib/providers/yahoo";
 import type { InstrumentSymbol as InstrumentSymbolT } from "@/lib/types";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK, getCurrentRiskState, todaysRealizedPnl } from "@/lib/risk";
@@ -13,11 +13,10 @@ import { computeScaledContracts } from "@/lib/positionSizing";
 export const dynamic = "force-dynamic";
 
 async function resolveEconEvents() {
-  // Opportunistically kick off / poll the async Apify scrape (fast, never blocks —
-  // see advanceEconCalendarSync for why this can't run inline). Always serve
-  // whatever's in the DB regardless of outcome, so a slow/failed scrape never
-  // breaks the dashboard.
-  await advanceEconCalendarSync().catch(() => {});
+  // Opportunistically sync (gated to once/hour internally — see
+  // syncEconCalendarFromFinnhub). Always serve whatever's in the DB regardless of
+  // outcome, so a slow/failed sync never breaks the dashboard.
+  await syncEconCalendarFromFinnhub().catch(() => {});
 
   const rows = await prisma.economicEvent.findMany({
     where: { releaseAt: { gte: new Date(), lte: new Date(Date.now() + 24 * 60 * 60 * 1000) } },

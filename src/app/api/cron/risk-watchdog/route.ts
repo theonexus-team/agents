@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkCronSecret } from "@/lib/auth";
 import { runRiskWatchdogCheck } from "@/lib/riskWatchdog";
-import { advanceEconCalendarSync } from "@/lib/providers/apify-forexfactory";
+import { syncEconCalendarFromFinnhub } from "@/lib/providers/finnhub";
 
 /**
  * Once-daily heartbeat (Vercel Hobby plan caps crons at once/day — see vercel.json).
@@ -10,19 +10,13 @@ import { advanceEconCalendarSync } from "@/lib/providers/apify-forexfactory";
  * 1. Risk watchdog fallback — the real-time trigger is the webhook's exit handler
  *    (runs on every trade close); this just guarantees a fresh status even on a day
  *    with zero trades.
- * 2. Econ calendar sync — advanceEconCalendarSync() was previously only ever called
- *    as a side effect of someone having the main dashboard open in a browser (it
- *    polls every 15s). If nobody has a tab open, that sync silently stalls and news
- *    blackout protection goes stale with no one knowing. This guarantees at least
- *    one server-driven refresh per day independent of any browser tab. Two calls
- *    back-to-back because the sync is a state machine (kick off a run, then check
- *    it) — the underlying Apify actor finishes in ~3s, so calling it twice in one
- *    invocation usually completes a full cycle instead of waiting until tomorrow's
- *    heartbeat to notice the run succeeded. Sleep kept short (3s, not the full ~3s+
- *    margin) to stay well under Vercel Hobby's 10s function cap — if the run hasn't
- *    finished yet, tomorrow's heartbeat (or the next dashboard page load) picks up
- *    the "running" state and finishes it then. Self-healing either way, just a
- *    possible extra day's lag in the worst case, never permanent staleness.
+ * 2. Econ calendar sync — previously only ever advanced as a side effect of someone
+ *    having the main dashboard open (it polled every 15s). If nobody had a tab open,
+ *    news blackout protection went stale with no one knowing — confirmed live it
+ *    actually had (3+ days stale). Also previously sourced from Apify scraping
+ *    ForexFactory, which hit its own monthly usage hard limit — see finnhub.ts for
+ *    why this now pulls from Finnhub's actual API instead. One plain synchronous
+ *    call, no async run-then-poll dance needed like the old Apify path required.
  */
 export async function GET(req: NextRequest) {
   if (!checkCronSecret(req.headers.get("authorization"))) {
@@ -30,10 +24,7 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await runRiskWatchdogCheck();
-
-  await advanceEconCalendarSync().catch(() => {});
-  await new Promise((r) => setTimeout(r, 3000));
-  await advanceEconCalendarSync().catch(() => {});
+  await syncEconCalendarFromFinnhub().catch(() => {});
 
   return NextResponse.json({ ok: true, ...result });
 }
