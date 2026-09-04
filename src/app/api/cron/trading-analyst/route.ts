@@ -25,9 +25,14 @@ import { getActiveLearnings, formatLearningsForPrompt } from "@/lib/agentLearnin
  *
  * "Run tests longer" per the user — MIN_TRADES_FOR_PROPOSAL gates the whole LLM
  * pipeline: below it, this just logs a NO_ACTION row noting the sample is still too
- * thin, without spending any LLM calls on it.
+ * thin, without spending any LLM calls on it. Set to 6 (lowered from 8 on
+ * 2026-09-04, per user pushback that 8 was an arbitrary pick, not something they'd
+ * actually asked for) to match the Analyst's own internal per-combo threshold
+ * ("treat anything under 6 trades as too early to call") — below 6 total trades in
+ * the window, no single combo could ever reach that bar anyway, so running the LLM
+ * pipeline below 6 would just burn a call to say "not enough data."
  */
-const MIN_TRADES_FOR_PROPOSAL = 8;
+const MIN_TRADES_FOR_PROPOSAL = 6;
 /** Fallback window start if no prior AnalystRun exists — the moment the current
  * allowlist went live, so the first run only ever looks at post-allowlist trades. */
 const ALLOWLIST_LIVE_SINCE = new Date("2026-09-03T18:20:00-04:00");
