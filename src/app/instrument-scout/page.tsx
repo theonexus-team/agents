@@ -6,23 +6,70 @@ import { fmtDateTime } from "@/lib/format";
 
 const DESK_KEY_STORAGE_KEY = "theonexus_desk_key";
 
-type ScoutResult = {
+type OverallRow = {
   id: string;
   strategy: string;
   instrumentSymbol: string;
   timeframe: string;
   dataStart: string;
   dataEnd: string;
-  createdAt: string;
   trades: number;
   winRate: number;
   net: number;
   maxDrawdown: number;
 };
 
+type SessionRow = {
+  runId: string;
+  strategy: string;
+  instrumentSymbol: string;
+  timeframe: string;
+  session: string;
+  trades: number;
+  winRate: number;
+  net: number;
+  maxDrawdown: number;
+};
+
+function ResultsTable({ rows, showTimeframe, showSession }: { rows: (OverallRow | SessionRow)[]; showTimeframe: boolean; showSession: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead>
+          <tr className="text-[11px] uppercase tracking-wide text-muted">
+            <th className="pb-2 pr-4">Instrument</th>
+            <th className="pb-2 pr-4">Strategy</th>
+            {showTimeframe && <th className="pb-2 pr-4">Timeframe</th>}
+            {showSession && <th className="pb-2 pr-4">Session</th>}
+            <th className="pb-2 pr-4">Trades</th>
+            <th className="pb-2 pr-4">Win Rate</th>
+            <th className="pb-2 pr-4">Net</th>
+            <th className="pb-2">Max Drawdown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={"session" in r ? `${r.runId}-${r.session}` : r.id} className={i === 0 ? "border-t border-panel-border/40" : "border-t border-panel-border/40"}>
+              <td className="py-2 pr-4 font-mono">{r.instrumentSymbol}</td>
+              <td className="py-2 pr-4">{r.strategy}</td>
+              {showTimeframe && <td className="py-2 pr-4">{r.timeframe}</td>}
+              {showSession && "session" in r && <td className="py-2 pr-4">{r.session}</td>}
+              <td className="py-2 pr-4">{r.trades}</td>
+              <td className="py-2 pr-4">{r.winRate.toFixed(1)}%</td>
+              <td className={`py-2 pr-4 ${r.net >= 0 ? "text-accent" : "text-danger"}`}>${r.net.toFixed(2)}</td>
+              <td className="py-2">${r.maxDrawdown.toFixed(2)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export default function InstrumentScoutPage() {
   const [deskKey, setDeskKeyState] = useState("");
-  const [results, setResults] = useState<ScoutResult[] | null>(null);
+  const [overall, setOverall] = useState<OverallRow[] | null>(null);
+  const [bySession, setBySession] = useState<SessionRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -43,12 +90,14 @@ export default function InstrumentScoutPage() {
     try {
       const res = await fetch(`/api/instrument-scout?deskKey=${encodeURIComponent(key)}`, { cache: "no-store" });
       if (!res.ok) {
-        setResults(null);
+        setOverall(null);
+        setBySession(null);
         setError(res.status === 401 ? "invalid desk key" : `HTTP ${res.status}`);
         return;
       }
-      const json = (await res.json()) as { results: ScoutResult[] };
-      setResults(json.results);
+      const json = (await res.json()) as { overall: OverallRow[]; bySession: SessionRow[] };
+      setOverall(json.overall);
+      setBySession(json.bySession);
     } catch {
       setError("failed to load");
     }
@@ -92,47 +141,29 @@ export default function InstrumentScoutPage() {
 
       {error && <Panel className="text-sm text-danger">{error}</Panel>}
 
-      {results === null && !error && <p className="text-sm text-muted">loading…</p>}
+      {overall === null && !error && <p className="text-sm text-muted">loading…</p>}
 
-      {results !== null && results.length === 0 && (
+      {overall !== null && overall.length === 0 && (
         <Panel className="text-sm text-muted">No scout runs yet — run <code>backtest/scout.py</code> to populate this.</Panel>
       )}
 
-      {results && results.length > 0 && (
-        <Panel>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-[11px] uppercase tracking-wide text-muted">
-                  <th className="pb-2 pr-4">Instrument</th>
-                  <th className="pb-2 pr-4">Strategy</th>
-                  <th className="pb-2 pr-4">Timeframe</th>
-                  <th className="pb-2 pr-4">Trades</th>
-                  <th className="pb-2 pr-4">Win Rate</th>
-                  <th className="pb-2 pr-4">Net</th>
-                  <th className="pb-2 pr-4">Max Drawdown</th>
-                  <th className="pb-2">Data Window</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r) => (
-                  <tr key={r.id} className="border-t border-panel-border/40">
-                    <td className="py-2 pr-4 font-mono">{r.instrumentSymbol}</td>
-                    <td className="py-2 pr-4">{r.strategy}</td>
-                    <td className="py-2 pr-4">{r.timeframe}</td>
-                    <td className="py-2 pr-4">{r.trades}</td>
-                    <td className="py-2 pr-4">{r.winRate.toFixed(1)}%</td>
-                    <td className={`py-2 pr-4 ${r.net >= 0 ? "text-accent" : "text-danger"}`}>${r.net.toFixed(2)}</td>
-                    <td className="py-2 pr-4">${r.maxDrawdown.toFixed(2)}</td>
-                    <td className="py-2 text-xs text-muted">
-                      {fmtDateTime(r.dataStart)} → {fmtDateTime(r.dataEnd)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      {bySession && bySession.length > 0 && (
+        <Panel title="By session" subtitle="Same instrument + strategy + timeframe combo can look very different session to session — same pattern as the live account.">
+          <ResultsTable rows={bySession} showTimeframe={true} showSession={true} />
         </Panel>
+      )}
+
+      {overall && overall.length > 0 && (
+        <Panel title="Overall (all sessions combined)">
+          <ResultsTable rows={overall} showTimeframe={true} showSession={false} />
+        </Panel>
+      )}
+
+      {overall && overall.length > 0 && (
+        <p className="text-xs text-muted">
+          Data window per run shown on hover of the run — earliest: {fmtDateTime(overall[overall.length - 1]?.dataStart)}, latest:{" "}
+          {fmtDateTime(overall[0]?.dataEnd)}.
+        </p>
       )}
     </main>
   );
