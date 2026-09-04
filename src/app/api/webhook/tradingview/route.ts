@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     // Only the primary account is filtered by performance history — client accounts
     // don't have their own combo-level track record yet to filter against.
-    if (identity.kind === "legacy" && !isAllowedToTrade(d.symbol, d.strategy, d.session)) {
+    if (identity.kind === "legacy" && !(await isAllowedToTrade(d.symbol, d.strategy, d.session))) {
       return NextResponse.json(
         { ok: false, reason: `${d.symbol} + ${d.strategy} + ${d.session} isn't on the trusted-combo allowlist, entry ignored` },
         { status: 200 }

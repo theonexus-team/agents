@@ -470,14 +470,20 @@ model BacktestTrade {
 
 /// One run of the automated performance-review pipeline (see
 /// /api/cron/trading-analyst), triggered on a schedule by Vercel Cron — not tied to
-/// any local machine. Three roles run as sequential Claude API calls against the
-/// SAME window of primary-account trades: Analyst computes per-combo stats and
-/// flags divergence from STRATEGY_SESSION_ALLOWLIST; Risk Manager checks any
-/// flagged change against the real per-account drawdown limits and can object
-/// (analystFinding then reflects a revised pass); Adjuster drafts a proposed
-/// allowlist diff. Deliberately review-gated per the user's explicit choice
-/// (2026-09-03) — nothing here ever edits route.ts or deploys on its own. A human
-/// (or a future Claude Code session) reads status=PENDING_REVIEW rows and decides.
+/// any local machine. Three roles run as sequential NVIDIA-mediated LLM calls
+/// against the SAME window of primary-account trades: Analyst computes per-combo
+/// stats and flags divergence from the live AllowlistEntry table; Risk Manager
+/// checks any flagged change against the real per-account drawdown limits and can
+/// object (analystFinding then reflects a revised pass); Adjuster drafts a
+/// structured change and applies it directly to AllowlistEntry.
+///
+/// Was review-gated (status PENDING_REVIEW, nothing auto-applied) from 2026-09-03
+/// until 2026-09-04, when the user explicitly asked for the gate removed ("remove
+/// it i thought i was clear") — accepted given liveExecutionMode is off (paper
+/// only). status is now "APPLIED" (Adjuster wrote real AllowlistEntry changes) or
+/// "NO_ACTION" (nothing crossed the proposal bar, or the analyst found nothing to
+/// change). proposedDiff holds what WAS applied when status=APPLIED, not a pending
+/// proposal — kept the field name for backward compatibility with pre-09-04 rows.
 model AnalystRun {
   id             String    @id @default(cuid())
   createdAt      DateTime  @default(now())
@@ -494,7 +500,7 @@ model AnalystRun {
   riskVerdict    String    @db.Text
   /// Null when nothing crossed the proposal threshold this run (status NO_ACTION).
   proposedDiff   String?   @db.Text
-  status         String    @default("PENDING_REVIEW")
+  status         String    @default("NO_ACTION")
   reviewedAt     DateTime?
 
   @@index([createdAt])
@@ -575,6 +581,35 @@ model AgentMessage {
   @@index([createdAt])
   @@index([agent])
   @@index([replyToId])
+}
+
+/// The live allowlist gate — moved from a hardcoded TypeScript array
+/// (src/lib/allowlist.ts) to the DB 2026-09-04 so Trading Analyst's Adjuster step
+/// can apply changes directly. This was the actual blocker on "remove the review
+/// gate": a Vercel serverless function can't commit code + redeploy on its own (no
+/// git remote existed at the time, and even with one, git-commit-from-a-stateless-
+/// function is fragile) — a DB write has none of that friction and is genuinely the
+/// right architecture for something meant to change on its own. isAllowedToTrade()
+/// queries this table on every webhook entry. No unique constraint on
+/// (symbol,strategy,session) — a combo can be added, removed (active=false,
+/// removedAt set), and re-added later, each as its own row, preserving full history
+/// instead of overwriting it.
+model AllowlistEntry {
+  id        String    @id @default(cuid())
+  symbol    InstrumentSymbol
+  strategy  String
+  session   Session
+  addedAt   DateTime  @default(now())
+  /// "seed" (the 9 entries migrated from the original hardcoded array) |
+  /// "trading-analyst" (auto-applied by the Adjuster) — a human-added path isn't
+  /// wired up yet, but the field allows for one later without a schema change.
+  addedBy   String
+  active    Boolean   @default(true)
+  removedAt DateTime?
+  removedBy String?
+
+  @@index([active])
+  @@index([symbol, strategy, session])
 }
 
 /// Persistent, accumulated lessons — the actual "getting smarter over time" piece

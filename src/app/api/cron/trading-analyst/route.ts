@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkCronSecret } from "@/lib/auth";
 import { callLlm } from "@/lib/llm";
-import { STRATEGY_SESSION_ALLOWLIST } from "@/lib/allowlist";
+import { getActiveAllowlist, addAllowlistEntry, removeAllowlistEntry, SYMBOLS, SESSIONS, LIVE_STRATEGIES } from "@/lib/allowlist";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK } from "@/lib/risk";
 import { sendPushToAll } from "@/lib/push";
 import { getRecentBoardMessages, formatBoardForPrompt, postToBoard, getLatestFrom } from "@/lib/agentBoard";
@@ -13,11 +13,15 @@ import { getActiveLearnings, formatLearningsForPrompt } from "@/lib/agentLearnin
  * (see vercel.json) — runs entirely on Vercel's servers, no dependency on any local
  * machine. Three roles, each a distinct LLM call sharing the same window of primary-
  * account trades: Analyst finds divergence from the current allowlist, Risk Manager
- * checks it against real account risk limits and can object once, Adjuster drafts a
- * plain-language proposed diff. Deliberately REVIEW-GATED per the user's explicit
- * choice (2026-09-03) — this route never edits route.ts or deploys anything. It only
- * writes an AnalystRun row for a human (or a future Claude Code session) to read and
- * act on.
+ * checks it against real account risk limits and can object once, Adjuster applies a
+ * structured change DIRECTLY to the AllowlistEntry table.
+ *
+ * Was review-gated (drafted a proposal, never applied) from 2026-09-03 to
+ * 2026-09-04 — the user explicitly asked for that gate removed ("remove it i
+ * thought i was clear"), accepted given liveExecutionMode is off (paper only). The
+ * allowlist itself moved from a hardcoded TS array to the DB the same day
+ * specifically to make this possible from a stateless serverless function (no git
+ * commit/redeploy needed) — see AllowlistEntry in schema.prisma.
  *
  * "Run tests longer" per the user — MIN_TRADES_FOR_PROPOSAL gates the whole LLM
  * pipeline: below it, this just logs a NO_ACTION row noting the sample is still too
@@ -76,8 +80,9 @@ function computeComboStats(
   return out.sort((a, b) => b.net - a.net);
 }
 
-function formatAllowlist(): string {
-  return STRATEGY_SESSION_ALLOWLIST.map((a) => `- ${a.symbol} + ${a.strategy} + ${a.session}`).join("\n");
+async function formatAllowlist(): Promise<string> {
+  const list = await getActiveAllowlist();
+  return list.map((a) => `- ${a.symbol} + ${a.strategy} + ${a.session}`).join("\n");
 }
 
 function formatComboStats(stats: ComboStats[]): string {
@@ -85,6 +90,29 @@ function formatComboStats(stats: ComboStats[]): string {
   return stats
     .map((s) => `- ${s.symbol} + ${s.strategy} + ${s.session}: ${s.n} trades, ${s.winRate.toFixed(1)}% win rate, net $${s.net.toFixed(2)}, max drawdown $${s.maxDrawdown.toFixed(2)}`)
     .join("\n");
+}
+
+type AllowlistChange = { symbol: string; strategy: string; session: string; reason: string };
+type AdjusterOutput = { add: AllowlistChange[]; remove: AllowlistChange[] };
+
+/** Only accepts changes referencing real symbols/strategies/sessions — a
+ * hallucinated or malformed value from the LLM gets silently dropped rather than
+ * applied, since applying garbage to a live gating table is worse than doing
+ * nothing. Returns the valid subset plus a log of anything rejected. */
+function validateChanges(changes: AllowlistChange[]): { valid: AllowlistChange[]; rejected: string[] } {
+  const valid: AllowlistChange[] = [];
+  const rejected: string[] = [];
+  for (const c of changes) {
+    const symbolOk = (SYMBOLS as readonly string[]).includes(c.symbol);
+    const strategyOk = (LIVE_STRATEGIES as readonly string[]).includes(c.strategy);
+    const sessionOk = (SESSIONS as readonly string[]).includes(c.session);
+    if (symbolOk && strategyOk && sessionOk) {
+      valid.push(c);
+    } else {
+      rejected.push(`${c.symbol} + ${c.strategy} + ${c.session} (invalid ${!symbolOk ? "symbol" : !strategyOk ? "strategy" : "session"})`);
+    }
+  }
+  return { valid, rejected };
 }
 
 export async function GET(req: NextRequest) {
@@ -118,7 +146,7 @@ export async function GET(req: NextRequest) {
   }
 
   const comboStats = computeComboStats(trades);
-  const analystLearnings = await getActiveLearnings("trading-analyst");
+  const [analystLearnings, currentAllowlist] = await Promise.all([getActiveLearnings("trading-analyst"), formatAllowlist()]);
 
   const analystSystem =
     "You are the performance analyst for a live futures trading strategy allowlist. " +
@@ -131,7 +159,7 @@ export async function GET(req: NextRequest) {
     "You also have a standing set of lessons learned from past runs and other agents — apply them, don't re-derive " +
     "something already known:\n" +
     formatLearningsForPrompt(analystLearnings);
-  const analystUser = `CURRENT ALLOWLIST:\n${formatAllowlist()}\n\nPERFORMANCE THIS WINDOW (${trades.length} trades, ${windowStart.toISOString()} to ${windowEnd.toISOString()}):\n${formatComboStats(comboStats)}`;
+  const analystUser = `CURRENT ALLOWLIST:\n${currentAllowlist}\n\nPERFORMANCE THIS WINDOW (${trades.length} trades, ${windowStart.toISOString()} to ${windowEnd.toISOString()}):\n${formatComboStats(comboStats)}`;
 
   let analystFinding = await callLlm(analystSystem, analystUser);
   const analystMsgId = await postToBoard(
@@ -144,12 +172,9 @@ export async function GET(req: NextRequest) {
   // the other agents have been finding, not just static limits. Most directly
   // relevant: Risk Watchdog's CURRENT status (is the account already stressed right
   // now?), not just the fixed dollar limits, plus recent board activity generally.
-  // getLatestFrom (not just the live-status table) so the reply can thread to the
-  // actual post Risk Watchdog made, not just reference its data silently.
-  const [liveRiskStatus, boardHistory, latestRiskWatchdogPost, riskManagerLearnings] = await Promise.all([
+  const [liveRiskStatus, boardHistory, riskManagerLearnings] = await Promise.all([
     prisma.riskWatchdogStatus.findUnique({ where: { id: "singleton" } }),
     getRecentBoardMessages(10),
-    getLatestFrom("risk-watchdog"),
     getActiveLearnings("trading-analyst"),
   ]);
   const liveRiskLine = liveRiskStatus
@@ -164,7 +189,8 @@ export async function GET(req: NextRequest) {
     "(e.g. the analyst is reacting to too small a sample, the proposed change would concentrate risk, or the account " +
     "is already under strain per the live risk status above). Address the Analyst directly (\"@Analyst, ...\") and, " +
     "if you're leaning on Risk Watchdog's status, say so explicitly (\"@Risk-Watchdog reports...\") — this is a " +
-    "conversation between named agents, not an isolated verdict. " +
+    "conversation between named agents, not an isolated verdict. This is now an AUTO-APPLY pipeline — an APPROVE " +
+    "here means the change actually goes live immediately, not just a recommendation, so weigh that. " +
     "You also have a standing set of lessons learned from past runs — apply them:\n" +
     formatLearningsForPrompt(riskManagerLearnings) + "\n" +
     "Start your response with either 'APPROVE:' or 'OBJECT:' followed by your reasoning.";
@@ -178,35 +204,53 @@ export async function GET(req: NextRequest) {
     const revisedRiskUser = `${analystFinding}\n\nRecent activity from other agents:\n${formatBoardForPrompt(boardHistory)}`;
     riskVerdict = await callLlm(riskSystem, revisedRiskUser);
   }
-  // Reply-threaded to the Analyst's own post (and, if its reasoning leaned on
-  // Risk Watchdog, that gets referenced by name in the text above too) — this is
-  // what makes the board read as a conversation instead of parallel broadcasts.
-  const riskMsgId = await postToBoard(
-    "trading-analyst",
-    `Risk Manager: ${riskVerdict}`,
-    "/analyst",
-    analystMsgId
-  ).catch(() => undefined);
-  void latestRiskWatchdogPost; // referenced in the prompt text above, not threaded directly — see liveRiskLine
+  const riskMsgId = await postToBoard("trading-analyst", `Risk Manager: ${riskVerdict}`, "/analyst", analystMsgId).catch(() => undefined);
 
   const approved = riskVerdict.trim().toUpperCase().startsWith("APPROVE");
 
-  let proposedDiff: string | null = null;
+  let appliedSummary: string | null = null;
   if (approved && /no change|no combo|nothing crosses|not.*recommend.*change/i.test(analystFinding) === false) {
     const adjusterSystem =
-      "You are the adjuster. Given an approved analyst finding about a trading allowlist, draft a concrete, " +
-      "plain-language proposed change to STRATEGY_SESSION_ALLOWLIST (a TypeScript array in src/lib/allowlist.ts). " +
-      "State exactly which (symbol, strategy, session) entries to add or remove, and one sentence of justification " +
-      "per change. If the finding doesn't actually call for a change, say 'NO CHANGE NEEDED' and nothing else.";
+      "You are the adjuster. Given an approved analyst finding about a trading allowlist, output ONLY a JSON object " +
+      '(no prose, no markdown fences) shaped exactly like: {"add": [{"symbol": "MNQ", "strategy": "1m ORB + VWAP", ' +
+      '"session": "LONDON", "reason": "..."}], "remove": [...]}. ' +
+      `Valid symbols: ${SYMBOLS.join(", ")}. Valid strategies: ${LIVE_STRATEGIES.join(", ")}. Valid sessions: ${SESSIONS.join(", ")}. ` +
+      'If the finding does not actually call for a change, output {"add": [], "remove": []}. ' +
+      "Every entry needs a one-sentence reason. This will be applied directly and automatically — be exact, not approximate.";
     const draft = await callLlm(adjusterSystem, analystFinding);
-    if (!/no change needed/i.test(draft.trim())) {
-      proposedDiff = draft;
-      await postToBoard(
-        "trading-analyst",
-        `Adjuster: proposing this change per the Risk Manager's approval above (pending human review): ${draft}`,
-        "/analyst",
-        riskMsgId
-      ).catch(() => {});
+
+    let parsed: AdjusterOutput | null = null;
+    try {
+      const jsonMatch = draft.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch {
+      parsed = null;
+    }
+
+    if (parsed && (parsed.add?.length || parsed.remove?.length)) {
+      const { valid: validAdds, rejected: rejectedAdds } = validateChanges(parsed.add ?? []);
+      const { valid: validRemoves, rejected: rejectedRemoves } = validateChanges(parsed.remove ?? []);
+
+      for (const c of validAdds) await addAllowlistEntry(c.symbol, c.strategy, c.session, "trading-analyst");
+      for (const c of validRemoves) await removeAllowlistEntry(c.symbol, c.strategy, c.session, "trading-analyst");
+
+      const parts: string[] = [];
+      if (validAdds.length) parts.push(`Added: ${validAdds.map((c) => `${c.symbol}+${c.strategy}+${c.session} (${c.reason})`).join("; ")}`);
+      if (validRemoves.length) parts.push(`Removed: ${validRemoves.map((c) => `${c.symbol}+${c.strategy}+${c.session} (${c.reason})`).join("; ")}`);
+      const rejected = [...rejectedAdds, ...rejectedRemoves];
+      if (rejected.length) parts.push(`Rejected as invalid (not applied): ${rejected.join("; ")}`);
+
+      if (validAdds.length || validRemoves.length) {
+        appliedSummary = parts.join(" | ");
+        await postToBoard("trading-analyst", `Adjuster: APPLIED — ${appliedSummary}`, "/analyst", riskMsgId).catch(() => {});
+      } else if (rejected.length) {
+        await postToBoard(
+          "trading-analyst",
+          `Adjuster: proposed changes were all invalid, nothing applied — ${rejected.join("; ")}`,
+          "/analyst",
+          riskMsgId
+        ).catch(() => {});
+      }
     }
   }
 
@@ -217,17 +261,15 @@ export async function GET(req: NextRequest) {
       tradesInWindow: trades.length,
       analystFinding,
       riskVerdict,
-      proposedDiff,
-      status: proposedDiff ? "PENDING_REVIEW" : "NO_ACTION",
+      proposedDiff: appliedSummary,
+      status: appliedSummary ? "APPLIED" : "NO_ACTION",
     },
   });
 
-  if (run.status === "PENDING_REVIEW") {
-    await sendPushToAll(
-      "Trading Analyst: review needed",
-      "A proposed allowlist change is waiting for review.",
-      "/analyst"
-    ).catch(() => {});
+  if (run.status === "APPLIED") {
+    await sendPushToAll("Trading Analyst: allowlist updated", appliedSummary ?? "The live allowlist was changed automatically.", "/analyst").catch(
+      () => {}
+    );
   }
 
   return NextResponse.json({ ok: true, status: run.status, runId: run.id });

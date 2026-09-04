@@ -115,7 +115,7 @@ export default function AnalystPage() {
             </div>
             {run.proposedDiff && (
               <div>
-                <div className="mb-1 text-[11px] uppercase tracking-wide text-warn">Proposed change (not applied)</div>
+                <div className="mb-1 text-[11px] uppercase tracking-wide text-accent">Applied to the live allowlist</div>
                 <p className="whitespace-pre-wrap rounded-md border border-panel-border/60 bg-black/20 p-3 text-foreground/90">
                   {run.proposedDiff}
                 </p>
