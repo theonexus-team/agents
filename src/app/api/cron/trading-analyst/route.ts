@@ -4,6 +4,7 @@ import { checkCronSecret } from "@/lib/auth";
 import { callLlm } from "@/lib/llm";
 import { STRATEGY_SESSION_ALLOWLIST } from "@/lib/allowlist";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK } from "@/lib/risk";
+import { sendPushToAll } from "@/lib/push";
 
 /**
  * Automated performance-review pipeline. Vercel Cron triggers this on a schedule
@@ -169,6 +170,14 @@ export async function GET(req: NextRequest) {
       status: proposedDiff ? "PENDING_REVIEW" : "NO_ACTION",
     },
   });
+
+  if (run.status === "PENDING_REVIEW") {
+    await sendPushToAll(
+      "Trading Analyst: review needed",
+      "A proposed allowlist change is waiting for review.",
+      "/analyst"
+    ).catch(() => {});
+  }
 
   return NextResponse.json({ ok: true, status: run.status, runId: run.id });
 }

@@ -522,3 +522,16 @@ model RiskWatchdogAlert {
 
   @@index([createdAt])
 }
+
+/// A browser's Web Push subscription (the standard PushManager.subscribe() result —
+/// endpoint URL + the p256dh/auth keys needed to encrypt a message to it). One row
+/// per device/browser that's opted in via /risk-watchdog or /analyst, not per user —
+/// there's no login system here, just desk-key-gated pages, so "subscribed devices"
+/// is the whole concept. See src/lib/push.ts for what sends to these.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}

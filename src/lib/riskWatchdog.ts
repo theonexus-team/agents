@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK, getCurrentRiskState, todaysRealizedPnl } from "@/lib/risk";
+import { sendPushToAll } from "@/lib/push";
 
 /**
  * Core risk-watchdog check, shared by two triggers:
@@ -61,6 +62,11 @@ export async function runRiskWatchdogCheck(): Promise<{ level: "OK" | "WARNING" 
 
   if (level !== (prevStatus?.level ?? "OK")) {
     await prisma.riskWatchdogAlert.create({ data: { level, message } });
+    // Only push on a change TOWARD worse, not on a recovery back to OK — a "you're
+    // fine now" notification isn't worth interrupting someone for.
+    if (level !== "OK") {
+      await sendPushToAll(`Risk Watchdog: ${level}`, message, "/risk-watchdog").catch(() => {});
+    }
   }
 
   return { level };

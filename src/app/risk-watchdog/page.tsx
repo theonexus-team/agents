@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Panel, StatTile } from "@/components/Panel";
+import { NotificationSetup } from "@/components/NotificationSetup";
 import { fmtDateTime } from "@/lib/format";
 
 const DESK_KEY_STORAGE_KEY = "theonexus_desk_key";
@@ -100,6 +101,8 @@ export default function RiskWatchdogPage() {
           lock
         </button>
       </div>
+
+      <NotificationSetup deskKey={deskKey} />
 
       {error && <Panel className="text-sm text-danger">{error}</Panel>}
 

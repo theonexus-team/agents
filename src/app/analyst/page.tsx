@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Panel } from "@/components/Panel";
+import { NotificationSetup } from "@/components/NotificationSetup";
 import { fmtDateTime } from "@/lib/format";
 
 // Same storage key the main dashboard uses — a desk key entered there auto-fills
@@ -86,6 +87,8 @@ export default function AnalystPage() {
           lock
         </button>
       </div>
+
+      <NotificationSetup deskKey={deskKey} />
 
       {error && <Panel className="text-sm text-danger">{error}</Panel>}
 
