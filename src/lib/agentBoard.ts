@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type AgentName = "risk-watchdog" | "trading-analyst" | "instrument-scout";
+export type AgentName = "risk-watchdog" | "trading-analyst" | "instrument-scout" | "team-planner";
 
 /** Posts a message to the shared agent board. Fire-and-forget-friendly — callers
  * should wrap in .catch(() => {}) the same way push notifications are, since a

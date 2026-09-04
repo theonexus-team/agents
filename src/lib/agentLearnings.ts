@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type LearningAgent = "risk-watchdog" | "trading-analyst" | "instrument-scout" | "shared";
+export type LearningAgent = "risk-watchdog" | "trading-analyst" | "instrument-scout" | "team-planner" | "shared";
 
 /** Records a new lesson. Doesn't dedupe automatically — if a lesson is being
  * revised/superseded, retire the old one explicitly (see retireLearning) rather

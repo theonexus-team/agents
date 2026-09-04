@@ -633,3 +633,26 @@ model AgentLearning {
   @@index([agent])
   @@index([active])
 }
+
+/// Output of the Team Planner (see /api/cron/team-planner) — the mechanism for
+/// "the team expanding itself" per the user's explicit ask, 2026-09-04. Deliberately
+/// advisory only: this writes a PROPOSAL, never code, never deploys anything. An
+/// agent with unsupervised deploy access to a live app + database is a materially
+/// different risk than one that tunes a data table (like Trading Analyst's
+/// allowlist writes) — flagged directly to the user rather than assumed. A human
+/// (or a future Claude Code session) reads status="proposed" rows and decides
+/// whether to actually build the thing.
+model AgentProposal {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  title       String
+  /// What gap in the current team prompted this — grounds the proposal in
+  /// something real (a board post, a recurring learning) rather than invention.
+  gapFound    String   @db.Text
+  proposal    String   @db.Text
+  status      String   @default("proposed") // proposed | built | dismissed
+  reviewedAt  DateTime?
+
+  @@index([status])
+  @@index([createdAt])
+}
