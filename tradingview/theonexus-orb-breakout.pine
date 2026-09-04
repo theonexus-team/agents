@@ -93,12 +93,32 @@ forceFlatMinutes = input.int(120, title = "Forced flat (minutes after ENTRY — 
 // P&L from real ticks * tick value * contracts too, instead of the old normalized
 // risk-per-trade estimate.
 tickDollarValue = symbolChoice == "HG" ? 12.50 : symbolChoice == "MNQ" ? 0.50 : symbolChoice == "MES" ? 1.25 : 1.00
-orbContracts    = symbolChoice == "HG" ? 1 : 4
-// Target is now dollar-based, not a fixed tick count: the old fixed 10-tick target
+
+// ── Scalp mode: fixed contracts + trailing stop (added 2026-09-04) ───────────
+// Replaces the old dynamic risk-laddered orbContracts/order-block-stop approach
+// with a fixed-size, fixed-max-risk, actively-trailed scheme, per the user's own
+// proven discretionary method: enter, trail the stop up behind each candle's wick
+// as price moves favorably (tightening once profit clears a threshold), take
+// $300-400 per SESSION and stop, sit out the rest of a session after any loss.
+// The dollar-based target above still applies at entry; the trail then manages
+// the stop from there, so most winners exit via the trail catching a pullback
+// rather than ever needing the fixed target to be hit.
+fixedContracts       = input.int(8, "Fixed contracts (replaces dynamic scaling)", minval = 1, group = "Scalp Mode")
+maxStopUsd           = input.float(300, "Max stop-loss risk ($) at Fixed Contracts", minval = 1, group = "Scalp Mode")
+trailBufferTicks     = input.int(2, "Trail buffer (ticks behind wick) below the tighten threshold", minval = 0, group = "Scalp Mode")
+tightTrailBufferTicks = input.int(1, "Tighter trail buffer (ticks) once profit clears the threshold", minval = 0, group = "Scalp Mode")
+tightenAtProfitUsd   = input.float(150, "Switch to the tighter trail once floating profit reaches this ($)", group = "Scalp Mode")
+sessionProfitCapUsd  = input.float(350, "Stop new entries once THIS SESSION's realized profit reaches this ($)", group = "Scalp Mode")
+sitOutAfterLoss      = input.bool(true, "Stop new entries for the rest of the session after any losing trade", group = "Scalp Mode")
+// Ticks needed to cap risk at maxStopUsd for fixedContracts, e.g. $300 / (8 * $0.50)
+// = 75 ticks on MNQ. Floored, not rounded, so real risk never exceeds maxStopUsd.
+stopTicksFixed = math.max(1, math.floor(maxStopUsd / (tickDollarValue * fixedContracts)))
+
+// Target is dollar-based, not a fixed tick count: the old fixed 10-tick target
 // cleared for as little as $20-40 on MGC/MNQ, taking trades off long before they'd
 // covered a meaningful move. Ticks needed = whatever it takes to clear minProfitUsd
 // at this instrument's real tick value * contract count.
-targetTicks = math.ceil(minProfitUsd / (tickDollarValue * orbContracts))
+targetTicks = math.ceil(minProfitUsd / (tickDollarValue * fixedContracts))
 
 // ── PickMyTrade relay (optional, off by default) ──────────────────────────────
 // When enabled, every strategy.entry()/strategy.close() call below also carries a
@@ -413,7 +433,7 @@ bool vwapOkShort = vwapBiasShort or bearBounceRecent
 // candle if VWAP (or a fresh order-block bounce) allows it. One trade max per
 // session; each session uses its own strategy.entry()/close() order id so the
 // four sessions can never collide with each other.
-f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk, secret, enabled, entryCutoffMin, flatMin, contracts, blockIfInsideOb) =>
+f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk, secret, enabled, entryCutoffMin, flatMin, contracts, blockIfInsideOb, stopTk, tickDollarVal, trailBufTk, tightTrailBufTk, tightenAtUsd, sessionCapUsd, sitOutAfterLossFlag) =>
     var bool tradeTaken = false
     var int breakoutDir = 0
     var int barsSinceBreakout = na
@@ -425,6 +445,8 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
     var float entryPx = na
     var float sessionOpenTime = na
     var float entryTime = na
+    var float sessionRealizedUsd = 0.0
+    var bool sessionHadLoss = false
 
     if newSession
         tradeTaken := false
@@ -432,6 +454,8 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
         barsSinceBreakout := na
         continuationConfirmed := false
         sessionOpenTime := time
+        sessionRealizedUsd := 0.0
+        sessionHadLoss := false
         // NOT resetting inLong/inShort/stopPx/targetPx/entryTime — an open position
         // from the tail end of the prior session window is still managed by its own
         // stop/target/force-flat, not silently abandoned.
@@ -446,12 +470,37 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
     int minutesSinceEntry = na(entryTime) ? na : int((time - entryTime) / 60000)
     bool pastFlatTime = not na(minutesSinceEntry) and minutesSinceEntry >= flatMin
 
+    // ── Trailing stop: ratchets toward the current bar's wick EVERY bar while a
+    // position is open, tightening once floating profit clears tightenAtUsd. Only
+    // ever moves in the trade's favor (candidateStop is discarded if it would
+    // loosen the stop) — this is what usually closes a winner, not the fixed
+    // target below, which is really just the worst-case cap if price runs
+    // straight through with no pullback to trail against.
+    if inLong
+        float unrealizedUsd = (close - entryPx) / tickSz * tickDollarVal * contracts
+        float bufTicks = unrealizedUsd >= tightenAtUsd ? tightTrailBufTk : trailBufTk
+        float candidateStop = low - bufTicks * tickSz
+        if candidateStop > stopPx
+            stopPx := candidateStop
+    if inShort
+        float unrealizedUsd = (entryPx - close) / tickSz * tickDollarVal * contracts
+        float bufTicks = unrealizedUsd >= tightenAtUsd ? tightTrailBufTk : trailBufTk
+        float candidateStop = high + bufTicks * tickSz
+        if candidateStop < stopPx
+            stopPx := candidateStop
+
     // ── Force-flat ──────────────────────────────────────────────────────────
     if pastFlatTime and inLong
+        float exitUsd = (close - entryPx) / tickSz * tickDollarVal * contracts
+        sessionRealizedUsd := sessionRealizedUsd + exitUsd
+        sessionHadLoss := sessionHadLoss or exitUsd < 0
         strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
         alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","timeframe":"' + timeframe.period + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
         inLong := false
     if pastFlatTime and inShort
+        float exitUsd = (entryPx - close) / tickSz * tickDollarVal * contracts
+        sessionRealizedUsd := sessionRealizedUsd + exitUsd
+        sessionHadLoss := sessionHadLoss or exitUsd < 0
         strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
         alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","timeframe":"' + timeframe.period + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
         inShort := false
@@ -459,19 +508,32 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
     // ── Normal target/stop exit ──────────────────────────────────────────────
     if inLong and (high >= targetPx or low <= stopPx)
         float exitPx = high >= targetPx ? targetPx : stopPx
+        float exitUsd = (exitPx - entryPx) / tickSz * tickDollarVal * contracts
+        sessionRealizedUsd := sessionRealizedUsd + exitUsd
+        sessionHadLoss := sessionHadLoss or exitUsd < 0
         strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
         alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","timeframe":"' + timeframe.period + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
         inLong := false
     if inShort and (low <= targetPx or high >= stopPx)
         float exitPx = low <= targetPx ? targetPx : stopPx
+        float exitUsd = (entryPx - exitPx) / tickSz * tickDollarVal * contracts
+        sessionRealizedUsd := sessionRealizedUsd + exitUsd
+        sessionHadLoss := sessionHadLoss or exitUsd < 0
         strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
         alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","timeframe":"' + timeframe.period + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
         inShort := false
 
+    // ── Session gates: once THIS SESSION's realized profit hits sessionCapUsd, or
+    // (if enabled) a loss has occurred this session, no NEW breakout can arm —
+    // matches the discretionary rule this whole scheme is modeled on ("if I lose I
+    // sit out until next session; if I hit $300-400 I'm done for the session"). An
+    // already-armed/pending setup is unaffected — this only blocks NEW arming.
+    bool sessionCappedOut = sessionRealizedUsd >= sessionCapUsd or (sitOutAfterLossFlag and sessionHadLoss)
+
     // ── Breakout tracking / entry logic ──────────────────────────────────────
     bool longBreak = false
     bool shortBreak = false
-    if not tradeTaken and enabled and not pastEntryCutoff and not na(orHigh) and not na(orLow)
+    if not tradeTaken and enabled and not pastEntryCutoff and not sessionCappedOut and not na(orHigh) and not na(orLow)
         bool closedAboveOrb = close > orHigh
         bool closedBelowOrb = close < orLow
         bool closedInsideOrb = close <= orHigh and close >= orLow
@@ -481,8 +543,11 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
             bool vwapOk = breakoutDir == 1 ? vwapOkLong : vwapOkShort
             if vwapOk and not blockIfInsideOb
                 float entryPxC = close
-                float obStop = breakoutDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                float stop = breakoutDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
+                // Fixed $-risk stop (see stopTicksFixed above) — replaces the old
+                // order-block-based stop. f_nearestBullishOB/f_nearestBearishOB are
+                // no longer used for stop placement, kept defined below only for
+                // the bounce-override VWAP-gate check, which is unrelated.
+                float stop = breakoutDir == 1 ? entryPxC - stopTk * tickSz : entryPxC + stopTk * tickSz
                 float target = breakoutDir == 1 ? entryPxC + tickSz * targetTk : entryPxC - tickSz * targetTk
                 if breakoutDir == 1
                     longBreak := true
@@ -519,8 +584,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                     bool vwapOk = revDir == 1 ? vwapOkLong : vwapOkShort
                     if vwapOk and not blockIfInsideOb
                         float entryPxR = close
-                        float obStop = revDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                        float stop = revDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
+                        float stop = revDir == 1 ? entryPxR - stopTk * tickSz : entryPxR + stopTk * tickSz
                         float target = revDir == 1 ? entryPxR + tickSz * targetTk : entryPxR - tickSz * targetTk
                         if revDir == 1
                             longBreak := true
@@ -552,8 +616,7 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
                     bool vwapOk = revDir == 1 ? vwapOkLong : vwapOkShort
                     if vwapOk and not blockIfInsideOb
                         float entryPxR = close
-                        float obStop = revDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                        float stop = revDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
+                        float stop = revDir == 1 ? entryPxR - stopTk * tickSz : entryPxR + stopTk * tickSz
                         float target = revDir == 1 ? entryPxR + tickSz * targetTk : entryPxR - tickSz * targetTk
                         if revDir == 1
                             longBreak := true
@@ -586,10 +649,10 @@ f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk,
 
     [longBreak, shortBreak]
 
-[tkLong, tkShort] = f_manageBreakout(tk_switch, tk_open_high, tk_open_low, "TOKYO",    symbolChoice, tickSize, targetTicks, webhookSecret, showTokyo,    breakoutWindowMinutes, forceFlatMinutes, orbContracts, closedInsideOb)
-[shLong, shShort] = f_manageBreakout(sh_switch, sh_open_high, sh_open_low, "SHANGHAI", symbolChoice, tickSize, targetTicks, webhookSecret, showShanghai, breakoutWindowMinutes, forceFlatMinutes, orbContracts, closedInsideOb)
-[ldLong, ldShort] = f_manageBreakout(ld_switch, ld_open_high, ld_open_low, "LONDON",   symbolChoice, tickSize, targetTicks, webhookSecret, showLondon,   breakoutWindowMinutes, forceFlatMinutes, orbContracts, closedInsideOb)
-[nyLong, nyShort] = f_manageBreakout(ny_switch, ny_open_high, ny_open_low, "NEW_YORK", symbolChoice, tickSize, targetTicks, webhookSecret, showNewYork,  breakoutWindowMinutes, forceFlatMinutes, orbContracts, closedInsideOb)
+[tkLong, tkShort] = f_manageBreakout(tk_switch, tk_open_high, tk_open_low, "TOKYO",    symbolChoice, tickSize, targetTicks, webhookSecret, showTokyo,    breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
+[shLong, shShort] = f_manageBreakout(sh_switch, sh_open_high, sh_open_low, "SHANGHAI", symbolChoice, tickSize, targetTicks, webhookSecret, showShanghai, breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
+[ldLong, ldShort] = f_manageBreakout(ld_switch, ld_open_high, ld_open_low, "LONDON",   symbolChoice, tickSize, targetTicks, webhookSecret, showLondon,   breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
+[nyLong, nyShort] = f_manageBreakout(ny_switch, ny_open_high, ny_open_low, "NEW_YORK", symbolChoice, tickSize, targetTicks, webhookSecret, showNewYork,  breakoutWindowMinutes, forceFlatMinutes, fixedContracts, closedInsideOb, stopTicksFixed, tickDollarValue, trailBufferTicks, tightTrailBufferTicks, tightenAtProfitUsd, sessionProfitCapUsd, sitOutAfterLoss)
 
 // ── Chart BUY/SELL markers ───────────────────────────────────────────────────
 anyLongEntry  = tkLong or shLong or ldLong or nyLong

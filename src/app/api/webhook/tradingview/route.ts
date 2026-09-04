@@ -4,7 +4,7 @@ import { checkWebhookSecret } from "@/lib/auth";
 import { z } from "zod";
 import { Account, Direction, InstrumentSymbol, Outcome, Session } from "@prisma/client";
 import { computeClosePnl } from "@/lib/pnl";
-import { MAX_DAILY_LOSS, MAX_LOSS_FROM_PEAK, getCurrentRiskState, todaysRealizedPnl, updateEquityTracking } from "@/lib/risk";
+import { MAX_DAILY_LOSS, todaysRealizedPnl, updateEquityTracking } from "@/lib/risk";
 import { findAccountBySecret, getAccountRiskState, accountTodaysRealizedPnl, updateAccountEquityTracking } from "@/lib/accounts";
 import { computeScaledContracts } from "@/lib/positionSizing";
 import { checkNewsBlackout } from "@/lib/newsBlackout";
@@ -241,20 +241,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Contract count is scaled by this account's own live risk state for MGC/MNQ —
-    // Pine has no way to know current drawdown/profit (alerts only flow outward,
-    // never queried), so it always sends its fixed baseline; the backend is the
-    // actual authority on sizing. HG is a full-size contract, not a micro, and stays
-    // at whatever Pine sent.
+    // Contract count for the LEGACY/primary account: as of 2026-09-04, both live
+    // strategies compute their own fixed/risk-capped contract count in Pine itself
+    // (see the "Scalp Mode" inputs in both .pine scripts — fixedContracts for ORB
+    // Breakout, and a zone-risk-auto-scaled tradeContracts for Algo 2), matching
+    // the user's own proven discretionary sizing method. The backend no longer
+    // overrides this for the legacy account — it used to (dynamic risk-laddered
+    // computeScaledContracts(), back when Pine always sent one fixed baseline
+    // number with no way to know current drawdown), but that's now in direct
+    // conflict with Pine deliberately choosing its own size per trade. Client
+    // accounts are UNCHANGED — this redesign is specific to the user's own primary
+    // account, client accounts still get the original dynamic scaling below.
     let contracts = d.contracts;
-    if (contracts != null && d.symbol !== "HG") {
-      if (identity.kind === "legacy") {
-        const risk = await getCurrentRiskState();
-        contracts = computeScaledContracts(risk.drawdownFromPeak, risk.profitFromStart, MAX_LOSS_FROM_PEAK);
-      } else {
-        const risk = await getAccountRiskState(identity.accountId);
-        contracts = computeScaledContracts(risk.drawdownFromPeak, risk.profitFromStart, risk.maxLossFromPeak);
-      }
+    if (contracts != null && d.symbol !== "HG" && identity.kind !== "legacy") {
+      const risk = await getAccountRiskState(identity.accountId);
+      contracts = computeScaledContracts(risk.drawdownFromPeak, risk.profitFromStart, risk.maxLossFromPeak);
     }
 
     // Real execution mode: don't create the dashboard-visible OpenPosition from

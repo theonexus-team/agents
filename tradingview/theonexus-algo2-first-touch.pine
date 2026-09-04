@@ -36,8 +36,9 @@
 //     zone (zone-to-zone) — if none exists, the trade is skipped (zone still
 //     consumed) rather than inventing a fallback target.
 //
-// Contracts default to 4 for MNQ/MGC and 1 for HG. PickMyTrade relay: off by
-// default, real computed JSON via alert_message when enabled.
+// Contracts (2026-09-04): fixed 8-contract cap, auto-scaled down per-trade if a
+// zone's stop is too wide to keep risk under $300 — see "Scalp Mode" inputs.
+// PickMyTrade relay: off by default, real computed JSON via alert_message when enabled.
 
 //@version=5
 
@@ -58,21 +59,24 @@ chartTimeframe = timeframe.period
 // so the profit cap below can be expressed in real dollars instead of raw ticks.
 tickDollarValue = symbolChoice == "HG" ? 12.50 : symbolChoice == "MNQ" ? 0.50 : symbolChoice == "MES" ? 1.25 : 1.00
 
-// ── Contracts ──────────────────────────────────────────────────────────────
-// Lowered from 4 -> 2: at 4 contracts the worst losing stretch on real backtest
-// data (~24 days, Aug 2026) was -$2,042 -- basically the whole $2,000 max-drawdown
-// unit this project uses for a funded-style account, no margin left. At 2
-// contracts that same stretch is -$1,021, roughly half the unit, while keeping
-// net profit positive. Scale back up if you're trading this on a larger account
-// where a $2,000-ish stretch is comfortable (e.g. $150k+).
-mnqContracts = input.int(2, "MNQ Contracts", minval = 1, group = "Contracts")
-mgcContracts = input.int(4, "MGC Contracts", minval = 1, group = "Contracts")
-hgContracts  = input.int(1, "HG1 Contracts", minval = 1, group = "Contracts")
-// Same conservative default as MNQ (2, not 4) — MES is also an equity-index
-// contract and new to this pipeline, no live track record yet to justify sizing
-// it any more aggressively.
-mesContracts = input.int(2, "MES Contracts", minval = 1, group = "Contracts")
-contracts = symbolChoice == "MNQ" ? mnqContracts : symbolChoice == "MGC" ? mgcContracts : symbolChoice == "MES" ? mesContracts : hgContracts
+// ── Scalp mode: fixed contracts (capped by zone risk) + trailing stop (added
+// 2026-09-04) ────────────────────────────────────────────────────────────────
+// Replaces the old flat per-symbol contract inputs with a fixed-cap, actively-
+// trailed scheme, per the user's own proven discretionary method — same as
+// ORB Breakout (see that script's header comment for the full rationale).
+// UNLIKE ORB Breakout, the stop here stays the zone's own boundary (Algo 2's
+// actual technical edge — "stop = the zone's own opposite edge" is core to this
+// strategy, not an incidental fallback) rather than a fixed tick distance from
+// entry. Contracts instead auto-scale DOWN from Fixed Contracts so a wide zone
+// never risks more than Max Stop-Loss — the zone's own stop level is honored,
+// the dollar risk is what's capped.
+fixedContracts       = input.int(8, "Fixed contracts cap (auto-scales down if a zone's stop is too wide for this)", minval = 1, group = "Scalp Mode")
+maxStopUsd           = input.float(300, "Max stop-loss risk ($) — never exceeded regardless of a zone's actual width", minval = 1, group = "Scalp Mode")
+trailBufferTicks     = input.int(2, "Trail buffer (ticks behind wick) below the tighten threshold", minval = 0, group = "Scalp Mode")
+tightTrailBufferTicks = input.int(1, "Tighter trail buffer (ticks) once profit clears the threshold", minval = 0, group = "Scalp Mode")
+tightenAtProfitUsd   = input.float(150, "Switch to the tighter trail once floating profit reaches this ($)", group = "Scalp Mode")
+sessionProfitCapUsd  = input.float(350, "Stop new entries once THIS SESSION's realized profit reaches this ($)", group = "Scalp Mode")
+sitOutAfterLoss      = input.bool(true, "Stop new entries for the rest of the session after any losing trade", group = "Scalp Mode")
 
 // ── PickMyTrade relay (optional, off by default) ──────────────────────────────
 pmtEnabled   = input.bool(false, "Relay real fills to PickMyTrade", group = "PickMyTrade")
@@ -146,9 +150,18 @@ bool currentSessionEnabled = tkActive ? enableTokyo : shActive ? enableShanghai 
 minAgeBars = input.int(3, "Minimum bars since block formed before trading it", minval = 0, group = "Zone Rules")
 maxTradesPerSession = input.int(3, "Max trades per session", minval = 1, group = "Zone Rules")
 var int tradesThisSession = 0
+// Session-scoped realized P&L + loss flag (added 2026-09-04, scalp mode) — reset
+// alongside tradesThisSession since both are keyed to the same session boundary.
+// Declared here (not down with the other entry/exit state) so this reset can
+// reference them — Pine requires a var declared before any reference to it.
+var float sessionRealizedUsd = 0.0
+var bool sessionHadLoss = false
 if anySessionSwitch
     tradesThisSession := 0
+    sessionRealizedUsd := 0.0
+    sessionHadLoss := false
 bool sessionCapReached = tradesThisSession >= maxTradesPerSession
+bool sessionCappedOut = sessionRealizedUsd >= sessionProfitCapUsd or (sitOutAfterLoss and sessionHadLoss)
 minAgeMs = minAgeBars * get_minutes() * 60000
 
 // ── Order blocks (simplified port of "Price Action Toolkit Lite [UAlgo]", CC BY-NC-SA
@@ -321,22 +334,55 @@ var bool inLong = false
 var bool inShort = false
 var float stopPx = na
 var float targetPx = na
+var float entryPx = na
+// Set at entry time — see the "auto-scales down" note on fixedContracts above.
+// Not always equal to fixedContracts: a wide zone caps this lower so risk never
+// exceeds maxStopUsd. Referenced everywhere a trade's own size matters after
+// entry (trailing math, exit P&L, the close/alert payloads).
+var int currentContracts = na
+// sessionRealizedUsd/sessionHadLoss are declared earlier, alongside
+// tradesThisSession — see that section for why.
 
 // Confirmation state: a rejection ARMS on the touch bar, FIRES on the NEXT bar's
 // close — "take the next candle to make sure," merged in from OB Reversal.
 var orderblock pendingBuyBlock = na
 var orderblock pendingSellBlock = na
 
+// ── Trailing stop: same scheme as ORB Breakout — ratchets toward the current
+// bar's wick every bar while in a position, tightening once floating profit
+// clears tightenAtProfitUsd, never loosening. Layered ON TOP of the zone-based
+// initial stop above (Algo 2's stop starts at the zone boundary, then trails
+// from there once price moves favorably) — the zone stop is what determines the
+// worst case, the trail is what usually determines the actual exit.
+if inLong
+    float unrealizedUsd = (close - entryPx) / tickSize * tickDollarValue * currentContracts
+    float bufTicks = unrealizedUsd >= tightenAtProfitUsd ? tightTrailBufferTicks : trailBufferTicks
+    float candidateStop = low - bufTicks * tickSize
+    if candidateStop > stopPx
+        stopPx := candidateStop
+if inShort
+    float unrealizedUsd = (entryPx - close) / tickSize * tickDollarValue * currentContracts
+    float bufTicks = unrealizedUsd >= tightenAtProfitUsd ? tightTrailBufferTicks : trailBufferTicks
+    float candidateStop = high + bufTicks * tickSize
+    if candidateStop < stopPx
+        stopPx := candidateStop
+
 // ── Normal target/stop exit ──────────────────────────────────────────────────
 if inLong and (high >= targetPx or low <= stopPx)
     float exitPx = high >= targetPx ? targetPx : stopPx
-    strategy.close("Long", alert_message = f_pmtMessage("close", contracts))
+    float exitUsd = (exitPx - entryPx) / tickSize * tickDollarValue * currentContracts
+    sessionRealizedUsd := sessionRealizedUsd + exitUsd
+    sessionHadLoss := sessionHadLoss or exitUsd < 0
+    strategy.close("Long", alert_message = f_pmtMessage("close", currentContracts))
     alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
     inLong := false
 
 if inShort and (low <= targetPx or high >= stopPx)
     float exitPx = low <= targetPx ? targetPx : stopPx
-    strategy.close("Short", alert_message = f_pmtMessage("close", contracts))
+    float exitUsd = (entryPx - exitPx) / tickSize * tickDollarValue * currentContracts
+    sessionRealizedUsd := sessionRealizedUsd + exitUsd
+    sessionHadLoss := sessionHadLoss or exitUsd < 0
+    strategy.close("Short", alert_message = f_pmtMessage("close", currentContracts))
     alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
     inShort := false
 
@@ -345,41 +391,52 @@ if inShort and (low <= targetPx or high >= stopPx)
 if not na(pendingBuyBlock)
     float target = f_nearestSellBlockAbove(close)
     if not zoneToZoneTarget or not na(target)
-        float entryPx = close
+        float entryPxC = close
         float stop = pendingBuyBlock.value
+        // Auto-scale contracts down from fixedContracts so this specific zone's
+        // stop distance never risks more than maxStopUsd — see fixedContracts note.
+        float zoneStopTicks = math.abs(entryPxC - stop) / tickSize
+        int tradeContracts = math.max(1, math.min(fixedContracts, math.floor(maxStopUsd / (zoneStopTicks * tickDollarValue))))
         inLong := true
+        entryPx := entryPxC
+        currentContracts := tradeContracts
         stopPx := stop
-        targetPx := zoneToZoneTarget ? target : entryPx + (entryPx - stop)
+        targetPx := zoneToZoneTarget ? target : entryPxC + (entryPxC - stop)
         if profitCapUsd > 0
-            float capDistance = (profitCapUsd / (tickDollarValue * contracts)) * tickSize
-            targetPx := math.min(targetPx, entryPx + capDistance)
+            float capDistance = (profitCapUsd / (tickDollarValue * tradeContracts)) * tickSize
+            targetPx := math.min(targetPx, entryPxC + capDistance)
         pendingBuyBlock.tradesTaken := pendingBuyBlock.tradesTaken + 1
         tradesThisSession := tradesThisSession + 1
-        strategy.entry("Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
-        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"LONG","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+        strategy.entry("Long", strategy.long, qty = tradeContracts, alert_message = f_pmtMessage("buy", tradeContracts))
+        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"LONG","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPxC, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(tradeContracts) + '}', alert.freq_once_per_bar_close)
     pendingBuyBlock := na
 
 if not na(pendingSellBlock)
     float target = f_nearestBuyBlockBelow(close)
     if not zoneToZoneTarget or not na(target)
-        float entryPx = close
+        float entryPxC = close
         float stop = pendingSellBlock.value
+        float zoneStopTicks = math.abs(stop - entryPxC) / tickSize
+        int tradeContracts = math.max(1, math.min(fixedContracts, math.floor(maxStopUsd / (zoneStopTicks * tickDollarValue))))
         inShort := true
+        entryPx := entryPxC
+        currentContracts := tradeContracts
         stopPx := stop
-        targetPx := zoneToZoneTarget ? target : entryPx - (stop - entryPx)
+        targetPx := zoneToZoneTarget ? target : entryPxC - (stop - entryPxC)
         if profitCapUsd > 0
-            float capDistance = (profitCapUsd / (tickDollarValue * contracts)) * tickSize
-            targetPx := math.max(targetPx, entryPx - capDistance)
+            float capDistance = (profitCapUsd / (tickDollarValue * tradeContracts)) * tickSize
+            targetPx := math.max(targetPx, entryPxC - capDistance)
         pendingSellBlock.tradesTaken := pendingSellBlock.tradesTaken + 1
         tradesThisSession := tradesThisSession + 1
-        strategy.entry("Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
-        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"SHORT","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPx, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
+        strategy.entry("Short", strategy.short, qty = tradeContracts, alert_message = f_pmtMessage("sell", tradeContracts))
+        alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + symbolChoice + '","timeframe":"' + chartTimeframe + '","direction":"SHORT","session":"' + currentSessionLabel + '","strategy":"Algo 2 First-Touch Zones","entryPrice":' + str.tostring(entryPxC, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(targetPx, format.mintick) + ',"contracts":' + str.tostring(tradeContracts) + '}', alert.freq_once_per_bar_close)
     pendingSellBlock := na
 
 // ── 2) Detect a fresh touch to arm for the NEXT bar. Blocked once the per-
-// session cap is reached, or this session is disabled in Session Filter above —
-// an already-pending entry above still fires either way ──
-if not sessionCapReached and currentSessionEnabled and not inLong and not inShort and na(pendingBuyBlock) and na(pendingSellBlock)
+// session cap is reached, this session is disabled in Session Filter above, or
+// sessionCappedOut (this session already hit its profit target or a loss, per
+// Scalp Mode above) — an already-pending entry above still fires either way ──
+if not sessionCapReached and not sessionCappedOut and currentSessionEnabled and not inLong and not inShort and na(pendingBuyBlock) and na(pendingSellBlock)
     touchedBuy = f_findTouchedBuyBlock()
     touchedSell = f_findTouchedSellBlock()
     // Nested `if`, not `and` — Pine evaluates both sides of `and` regardless of
