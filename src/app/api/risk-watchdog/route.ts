@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkDeskKey } from "@/lib/auth";
+import { num } from "@/lib/serialize";
 
 /** How stale the econ calendar sync can get before it's flagged — generous margin
  * above the once-daily server-driven refresh cadence (see the risk-watchdog cron),
@@ -28,7 +29,15 @@ export async function GET(req: NextRequest) {
     : null;
 
   return NextResponse.json({
-    status,
+    status: status && {
+      ...status,
+      currentEquity: num(status.currentEquity),
+      peakEquity: num(status.peakEquity),
+      drawdownFromPeak: num(status.drawdownFromPeak),
+      drawdownPct: num(status.drawdownPct),
+      dailyPnl: num(status.dailyPnl),
+      dailyLossPct: num(status.dailyLossPct),
+    },
     alerts,
     econCalendar: {
       lastSuccessAt: calendarSync?.lastSuccessAt ?? null,
