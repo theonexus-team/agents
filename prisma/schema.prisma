@@ -31,6 +31,15 @@ enum InstrumentSymbol {
   HG
   MNQ
   MES
+  /// Added 2026-09-04 for Instrument Scout (backtest/scout.py) — backtest-only
+  /// candidates, NOT on the live webhook's SYMBOLS list or STRATEGY_SESSION_
+  /// ALLOWLIST, so adding these values here has zero effect on live/paper trading.
+  /// Purely so BacktestRun (which types instrumentSymbol as this enum) can store
+  /// results for instruments not yet onboarded to live trading.
+  MYM
+  M2K
+  MCL
+  SIL
 }
 
 model Instrument {

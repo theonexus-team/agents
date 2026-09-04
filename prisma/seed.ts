@@ -164,6 +164,13 @@ async function main() {
     HG: 6.5,
     MNQ: 28550,
     MES: 6420,
+    // Backtest-only Instrument Scout candidates (see backtest/scout.py) — never get
+    // real Instrument rows or sample trades, just need a value here to satisfy the
+    // exhaustive Record type.
+    MYM: 42000,
+    M2K: 2300,
+    MCL: 65,
+    SIL: 30,
   };
 
   const tradesToCreate: {

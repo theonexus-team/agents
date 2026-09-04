@@ -19,15 +19,27 @@ from engine.db import get_conn, write_run
 from engine.runner import BacktestRunner
 from engine.stats import compute_stats
 from engine.strategy import FillTieBreak
-from ingest.fetch_yahoo import fetch_yahoo_1m_csv
+from ingest.fetch_yahoo import fetch_yahoo_csv
 from ingest.import_csv import ingest_csv
 from strategies import STRATEGIES
 
-#: Real CME/COMEX tick specs, matching prisma Instrument seed data.
+#: Real CME/COMEX tick specs. MGC/HG/MNQ match prisma Instrument seed data (already
+#: live-traded). MYM/M2K/MCL/SIL added 2026-09-04 for the Instrument Scout (see
+#: scout.py) — NOT onboarded to the live webhook/Prisma schema, backtest-only until
+#: real trades justify adding them there too. Specs verified against CME's own specs
+#: (tick_value = tick_size * contract multiplier checks out on all four):
+#:   MYM (Micro Dow):        1.00 pt tick = $0.50
+#:   M2K (Micro Russell 2K): 0.10 pt tick = $0.50
+#:   MCL (Micro Crude Oil):  $0.01/bbl tick = $1.00 (100 bbl contract)
+#:   SIL (Micro Silver):     $0.005/oz tick = $5.00 (1,000 oz contract)
 INSTRUMENTS = {
     "MGC": InstrumentSpec(symbol="MGC", tick_size=0.10, tick_value=1.00),
     "HG": InstrumentSpec(symbol="HG", tick_size=0.0005, tick_value=12.50),
     "MNQ": InstrumentSpec(symbol="MNQ", tick_size=0.25, tick_value=0.50),
+    "MYM": InstrumentSpec(symbol="MYM", tick_size=1.00, tick_value=0.50),
+    "M2K": InstrumentSpec(symbol="M2K", tick_size=0.10, tick_value=0.50),
+    "MCL": InstrumentSpec(symbol="MCL", tick_size=0.01, tick_value=1.00),
+    "SIL": InstrumentSpec(symbol="SIL", tick_size=0.005, tick_value=5.00),
 }
 
 
@@ -55,13 +67,13 @@ def cmd_ingest(args: argparse.Namespace) -> None:
 
 
 def cmd_fetch_yahoo(args: argparse.Namespace) -> None:
-    csv_path = fetch_yahoo_1m_csv(args.symbol, days=args.days)
-    result = ingest_csv(csv_path, args.symbol, "1m")
+    csv_path = fetch_yahoo_csv(args.symbol, args.timeframe, days=args.days)
+    result = ingest_csv(csv_path, args.symbol, args.timeframe)
     if result.skipped:
         print(f"Fetched {csv_path.name} but skipped ingest: {result.reason}")
         return
     print(
-        f"Fetched + ingested {result.rows_ingested} bar(s) for {args.symbol}/1m from Yahoo Finance, "
+        f"Fetched + ingested {result.rows_ingested} bar(s) for {args.symbol}/{args.timeframe} from Yahoo Finance, "
         f"spanning {result.min_ts} -> {result.max_ts}."
     )
 
@@ -162,10 +174,11 @@ def main() -> None:
     p_ingest.set_defaults(func=cmd_ingest)
 
     p_yahoo = sub.add_parser(
-        "fetch-yahoo", help="Pull recent 1m bars from Yahoo Finance (~60 days max) and ingest them"
+        "fetch-yahoo", help="Pull recent bars from Yahoo Finance and ingest them (lookback varies by timeframe)"
     )
     p_yahoo.add_argument("--symbol", required=True, choices=list(INSTRUMENTS))
-    p_yahoo.add_argument("--days", type=int, default=25)
+    p_yahoo.add_argument("--timeframe", default="1m", choices=["1m", "5m", "15m", "30m", "1h"])
+    p_yahoo.add_argument("--days", type=int, default=None, help="Defaults to the per-timeframe max if omitted")
     p_yahoo.set_defaults(func=cmd_fetch_yahoo)
 
     p_backtest = sub.add_parser("backtest", help="Run a strategy over ingested bars")
