@@ -172,7 +172,11 @@ export function Dashboard({
       ? "Live — real orders"
       : "Paper · Healthy";
   const statusTone: "accent" | "warn" = data.liveExecutionMode && !data.account ? "warn" : "accent";
-  const drawdown = data.risk.peakEquity - data.balance.current;
+  // The recorded peak can lag a hair behind the live balance right after a new
+  // high (updated on trade close, not continuously) — clamp so neither the
+  // "peak" nor the "drawdown" stat ever reads as a nonsensical negative amount.
+  const peakDisplay = Math.max(data.risk.peakEquity, data.balance.current);
+  const drawdown = Math.max(0, data.risk.peakEquity - data.balance.current);
 
   return (
     <>
@@ -219,17 +223,17 @@ export function Dashboard({
           style={{ background: "var(--panel-border)", boxShadow: "var(--shadow-sm)", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}
         >
           <StatCell label="Account balance" value={fmtUsd(data.balance.current)} sub={`started ${fmtUsd(data.balance.startedAt)}`} />
-          <StatCell label="Peak balance" value={fmtUsd(data.risk.peakEquity)} sub="high watermark" />
+          <StatCell label="Peak balance" value={fmtUsd(peakDisplay)} sub="high watermark" />
           <StatCell
             label="Drawdown from peak"
-            value={fmtUsd(drawdown, true)}
+            value={drawdown > 0 ? `-${fmtUsd(drawdown)}` : fmtUsd(0)}
             sub={`limit ${fmtUsd(data.risk.maxLossFromPeak)}`}
             valueColor={drawdown > 0 ? "var(--danger)" : undefined}
           />
           <StatCell
             label="Today's P&L"
             value={fmtUsd(data.risk.dailyPnl, true)}
-            sub={data.risk.dailyLossHit ? "daily loss limit hit" : `cap -${fmtUsd(data.risk.dailyLossLimit)}`}
+            sub={data.risk.dailyLossHit ? "daily loss limit hit" : `resets 6pm ET · cap -${fmtUsd(data.risk.dailyLossLimit)}`}
             valueColor={data.risk.dailyPnl >= 0 ? "var(--accent)" : "var(--danger)"}
           />
           <StatCell
