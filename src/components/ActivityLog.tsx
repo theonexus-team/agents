@@ -17,39 +17,16 @@ export function ActivityLog({ trades, signals }: { trades: TradeRow[]; signals: 
   return (
     <div>
       <div className="mb-2 flex gap-2">
-        <TabButton active={tab === "trades"} onClick={() => setTab("trades")}>
+        <button className="nx-tab" data-active={tab === "trades"} onClick={() => setTab("trades")}>
           Trade log ({trades.length})
-        </TabButton>
-        <TabButton active={tab === "signals"} onClick={() => setTab("signals")}>
+        </button>
+        <button className="nx-tab" data-active={tab === "signals"} onClick={() => setTab("signals")}>
           Signal feed ({signals.length})
-        </TabButton>
+        </button>
       </div>
 
       {tab === "trades" ? <TradeLogTable trades={trades} /> : <SignalFeed signals={signals} />}
     </div>
-  );
-}
-
-function TabButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
-        active
-          ? "border-accent/60 bg-accent/10 text-accent"
-          : "border-panel-border/60 text-muted hover:bg-white/5"
-      }`}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -62,9 +39,9 @@ function SignalFeed({ signals }: { signals: DashboardData["signals"] }) {
       {signals.length === 0 ? (
         <p className="text-sm text-muted">No signals yet.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5 text-sm">
+        <ul className="flex flex-col">
           {visible.map((s) => (
-            <li key={s.id} className="text-xs text-muted">
+            <li key={s.id} className="py-2.5 text-xs text-muted" style={{ boxShadow: "0 1px 0 var(--panel-border)" }}>
               <span className={s.direction === "LONG" ? "text-accent" : "text-danger"}>{s.direction}</span>{" "}
               {INSTRUMENT_LABEL[s.symbol]} · {SESSION_LABEL[s.session]} session · {fmtDateTime(s.occurredAt)}
               <br />
@@ -74,10 +51,7 @@ function SignalFeed({ signals }: { signals: DashboardData["signals"] }) {
         </ul>
       )}
       {signals.length > SIGNAL_PAGE_SIZE && (
-        <button
-          onClick={() => setShowAll((v) => !v)}
-          className="mt-3 text-xs text-muted underline decoration-dotted hover:text-foreground"
-        >
+        <button onClick={() => setShowAll((v) => !v)} className="btn btn-ghost mt-3 px-0">
           {showAll ? "Show fewer" : `Show all ${signals.length} signals`}
         </button>
       )}

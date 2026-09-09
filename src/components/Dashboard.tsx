@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Panel, StatTile } from "@/components/Panel";
-import { SessionCountdowns } from "@/components/SessionCountdowns";
 import { ActivityLog } from "@/components/ActivityLog";
+import { DashboardEquityCurve } from "@/components/DashboardEquityCurve";
 import { EngineControls } from "@/components/EngineControls";
-import { fmtDateTime, fmtPct, fmtPrice, fmtRelative, fmtUsd } from "@/lib/format";
+import { Panel } from "@/components/Panel";
+import { SessionCountdowns } from "@/components/SessionCountdowns";
+import { SiteHeader } from "@/components/SiteHeader";
+import { TradingAlgorithms } from "@/components/TradingAlgorithms";
+import { fmtDateTime, fmtPrice, fmtRelative, fmtUsd } from "@/lib/format";
 import { INSTRUMENT_LABEL, SESSION_LABEL, type DashboardData } from "@/lib/types";
 
 /**
@@ -119,6 +122,36 @@ export function Dashboard({
     setFlattening(null);
   }
 
+  function exportLog() {
+    if (!data) return;
+    const header = "opened,closed,symbol,direction,session,strategy,entry,exit,outcome,contracts,net,perDollarRisked\n";
+    const rows = data.tradeLog
+      .map((t) =>
+        [
+          t.openedAt,
+          t.closedAt,
+          t.symbol,
+          t.direction,
+          t.session,
+          t.strategy,
+          t.entryPrice,
+          t.exitPrice,
+          t.outcome,
+          t.contracts ?? "",
+          t.net,
+          t.perDollarRisked,
+        ].join(",")
+      )
+      .join("\n");
+    const blob = new Blob([header + rows], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `theonexus-trade-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (error && !data) {
     return (
       <main className="flex flex-1 items-center justify-center p-8 text-danger">{error}</main>
@@ -133,293 +166,316 @@ export function Dashboard({
     );
   }
 
+  const statusLabel = data.account
+    ? `${data.account.name} · Paper`
+    : data.liveExecutionMode
+      ? "Live — real orders"
+      : "Paper · Healthy";
+  const statusTone: "accent" | "warn" = data.liveExecutionMode && !data.account ? "warn" : "accent";
+  const drawdown = data.risk.peakEquity - data.balance.current;
+
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-      <header className="flex flex-col gap-1">
-        <div className="flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Theonexus Trading Oracle{data.account ? ` — ${data.account.name}` : ""}
-          </h1>
-          {/* Internal-only tools — never shown on a client account's scoped dashboard. */}
+    <>
+      <SiteHeader showNav={!data.account} status={{ label: statusLabel, tone: statusTone }} />
+
+      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-7 px-4 py-6 sm:px-6">
+        <section className="flex flex-wrap items-end gap-6">
+          <div className="min-w-0 flex-1 basis-80">
+            <div className="mb-2 text-[11px] tracking-[0.14em] text-brand uppercase">
+              {data.account ? "Client account" : "Live strategy"}
+            </div>
+            <h1 className="m-0 mb-1.5 text-[28px] font-medium text-foreground sm:text-[34px]">
+              {data.account ? data.account.name : "1-min ORB · VWAP"}
+            </h1>
+            <p className="m-0 text-[13px] text-muted">
+              Four futures instruments, Tokyo/Shanghai/London/New York opens · last check-in{" "}
+              <span className="text-foreground/80">{fmtRelative(data.status.reporterLastSeen)}</span> · mode:{" "}
+              {data.status.mode}
+              {data.liveExecutionMode ? " (real orders via NinjaTrader)" : " (simulated — no real money)"}
+            </p>
+            <p className="m-0 mt-1 text-[11px] text-muted/70">
+              prices delayed 5 min (standard exchange licensing) — simulated results already account for this
+            </p>
+          </div>
+          <div className="flex flex-none gap-2.5">
+            <button onClick={exportLog} className="btn btn-secondary">
+              Export log
+            </button>
+            <a href="#engine-controls" className="btn btn-primary">
+              Engine controls
+            </a>
+          </div>
           {!data.account && (
-            <div className="flex gap-3">
+            <div className="flex basis-full justify-end gap-4">
               <Link href="/kalshi" className="text-xs text-muted underline decoration-dotted hover:text-foreground">
                 Kalshi bot →
               </Link>
-              <Link href="/backtests" className="text-xs text-muted underline decoration-dotted hover:text-foreground">
-                Backtests →
-              </Link>
             </div>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/10 px-2.5 py-0.5 text-xs text-accent">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-            all systems live
-          </span>
-          <span className="text-muted">
-            dashboard reporter checked in {fmtRelative(data.status.reporterLastSeen)}
-          </span>
-        </div>
-        <p className="text-xs text-muted">
-          mode: {data.status.mode}
-          {data.liveExecutionMode ? " (real orders placed via NinjaTrader)" : " (simulated — no real money)"} ·
-          strategy: 1-minute ORB (Tokyo, Shanghai, London, New York opens) with VWAP bias
-        </p>
-        <p className="text-xs text-muted/70">
-          prices delayed 5 min (standard exchange licensing) — simulated results already account for this
-        </p>
-      </header>
+        </section>
 
-      <SessionCountdowns sessions={data.sessions} />
+        <section
+          className="grid gap-px overflow-hidden rounded-xl"
+          style={{ background: "var(--panel-border)", boxShadow: "var(--shadow-sm)", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))" }}
+        >
+          <StatCell label="Account balance" value={fmtUsd(data.balance.current)} sub={`started ${fmtUsd(data.balance.startedAt)}`} />
+          <StatCell label="Peak balance" value={fmtUsd(data.risk.peakEquity)} sub="high watermark" />
+          <StatCell
+            label="Drawdown from peak"
+            value={fmtUsd(drawdown, true)}
+            sub={`limit ${fmtUsd(data.risk.maxLossFromPeak)}`}
+            valueColor={drawdown > 0 ? "var(--danger)" : undefined}
+          />
+          <StatCell
+            label="Today's P&L"
+            value={fmtUsd(data.risk.dailyPnl, true)}
+            sub={data.risk.dailyLossHit ? "daily loss limit hit" : `cap -${fmtUsd(data.risk.dailyLossLimit)}`}
+            valueColor={data.risk.dailyPnl >= 0 ? "var(--accent)" : "var(--danger)"}
+          />
+          <StatCell
+            label="Position size"
+            value={`${data.risk.scaledMicroContracts} contracts`}
+            sub="MGC/MNQ scaled · HG fixed at 1"
+          />
+        </section>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Panel title="Paper account balance">
-          <div className="font-mono text-3xl text-foreground">{fmtUsd(data.balance.current)}</div>
-          <p className="mt-1 text-xs text-muted">
-            started at {fmtUsd(data.balance.startedAt)} · {data.balance.changeAbs >= 0 ? "up" : "down"}{" "}
-            <span className={data.balance.changeAbs >= 0 ? "text-accent" : "text-danger"}>
-              {fmtUsd(data.balance.changeAbs, true)}
-              {data.balance.startedAt > 0 ? ` (${fmtPct(data.balance.changePct, true)})` : ""}
-            </span>
-          </p>
-        </Panel>
-
-        <Panel title="Best it has been">
-          <div className="font-mono text-3xl text-foreground">{fmtUsd(data.bestEver.tradeableSet)}</div>
-          <p className="mt-1 text-xs text-muted">
-            gold only: {fmtUsd(data.bestEver.goldOnly)} · incl. MNQ research (not tradeable):{" "}
-            {fmtUsd(data.bestEver.full)}
-          </p>
-        </Panel>
-      </div>
-
-      <Panel
-        title="Risk limits"
-        subtitle={`${fmtUsd(data.risk.maxLossFromPeak)} max drawdown from peak equity · ${fmtUsd(data.risk.dailyLossLimit)} max loss per trading day (6pm ET – 5pm ET)`}
-        className={data.risk.maxLossBreached ? "border-danger" : undefined}
-      >
         {data.risk.maxLossBreached && (
-          <div className="mb-3 rounded-md border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            Max drawdown breached — {fmtUsd(data.risk.peakEquity)} peak minus $
-            {data.risk.maxLossFromPeak.toLocaleString()}. All new entries are blocked account-wide until this is
-            acknowledged in Engine controls below.
+          <div className="rounded-md border border-danger bg-danger/10 px-4 py-3 text-sm text-danger">
+            Max drawdown breached — {fmtUsd(data.risk.peakEquity)} peak minus {fmtUsd(data.risk.maxLossFromPeak)}. All
+            new entries are blocked account-wide until acknowledged in Engine controls below.
           </div>
         )}
-        <div className="grid gap-2 sm:grid-cols-2">
-          <div className="rounded-md border border-panel-border/60 bg-black/20 px-3 py-2.5">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Drawdown from peak</span>
-            <div className="font-mono text-lg text-foreground">
-              {fmtUsd(data.risk.peakEquity - data.balance.current, true)} / {fmtUsd(data.risk.maxLossFromPeak)}
-            </div>
-            <span className="text-[11px] text-muted/80">peak equity {fmtUsd(data.risk.peakEquity)}</span>
-          </div>
-          <div className="rounded-md border border-panel-border/60 bg-black/20 px-3 py-2.5">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Today&apos;s P&amp;L</span>
-            <div className={`font-mono text-lg ${data.risk.dailyPnl >= 0 ? "text-accent" : "text-danger"}`}>
-              {fmtUsd(data.risk.dailyPnl, true)} / -{fmtUsd(data.risk.dailyLossLimit)}
-            </div>
-            <span className="text-[11px] text-muted/80">
-              {data.risk.dailyLossHit ? "daily loss limit hit — resumes next trading day" : "current trading day"}
-            </span>
-          </div>
-          <div className="rounded-md border border-panel-border/60 bg-black/20 px-3 py-2.5 sm:col-span-2">
-            <span className="text-[11px] uppercase tracking-wide text-muted">Current MGC/MNQ size</span>
-            <div className="font-mono text-lg text-foreground">{data.risk.scaledMicroContracts} contracts</div>
-            <span className="text-[11px] text-muted/80">
-              scaled from drawdown/profit — HG stays fixed at 1
-            </span>
-          </div>
-        </div>
-      </Panel>
 
-      <Panel
-        title="Paper record"
-        subtitle="Every trade the current ruleset would have taken. Nothing is back-filled or invented."
-      >
-        {data.hiddenSummary.count > 0 && (
-          <p className="mb-4 text-xs text-muted/80">
-            {data.hiddenSummary.count} trades sit outside it and are hidden, not deleted:{" "}
-            {data.hiddenSummary.winners.count} winners worth {fmtUsd(data.hiddenSummary.winners.amount)} and{" "}
-            {data.hiddenSummary.losers.count} losers worth {fmtUsd(data.hiddenSummary.losers.amount)}.
-          </p>
-        )}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <h3 className="mb-2 text-xs font-medium text-muted">
-              Tradeable set — gold (micro) + copper
-            </h3>
+        <DashboardEquityCurve
+          startingBalance={data.balance.startedAt}
+          currentBalance={data.balance.current}
+          peakEquity={data.risk.peakEquity}
+          trades={data.tradeLog}
+        />
+
+        <SessionCountdowns sessions={data.sessions} />
+
+        <div className="grid gap-5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,420px),1fr))" }}>
+          <Panel title="Paper record" tag="tradeable set" subtitle="Every trade the current ruleset would have taken — nothing back-filled or invented.">
+            {data.hiddenSummary.count > 0 && (
+              <p className="mb-3 text-xs text-muted/80">
+                {data.hiddenSummary.count} trades sit outside it and are hidden, not deleted:{" "}
+                {data.hiddenSummary.winners.count} winners worth {fmtUsd(data.hiddenSummary.winners.amount)} and{" "}
+                {data.hiddenSummary.losers.count} losers worth {fmtUsd(data.hiddenSummary.losers.amount)}.
+              </p>
+            )}
+            <p className="mb-4 text-xs text-muted/80">
+              Best it has been: {fmtUsd(data.bestEver.tradeableSet)} · gold only {fmtUsd(data.bestEver.goldOnly)} ·
+              incl. MNQ research {fmtUsd(data.bestEver.full)}
+            </p>
             <StatGrid stats={data.stats.tradeable} />
-          </div>
-          <div>
+            <div className="hr" />
             <h3 className="mb-2 text-xs font-medium text-muted">Full record — everything the engine took</h3>
             <StatGrid stats={data.stats.full} />
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {data.perInstrument.map((ins) => (
-            <div
-              key={ins.symbol}
-              className="rounded-md border border-panel-border/60 bg-black/20 px-3 py-2.5"
-            >
-              <div className="text-xs text-muted">{INSTRUMENT_LABEL[ins.symbol]}</div>
-              <div className={`font-mono text-lg ${ins.netProfit >= 0 ? "text-accent" : "text-danger"}`}>
-                {fmtUsd(ins.netProfit, true)}
-              </div>
-              <div className="text-[11px] text-muted/70">
-                {ins.trades} trades{ins.research ? " · research" : ""}
-              </div>
+            <div className="mt-4 overflow-x-auto">
+              <table className="table" style={{ minWidth: 380 }}>
+                <thead>
+                  <tr>
+                    <th>Instrument</th>
+                    <th>Trades</th>
+                    <th className="text-right">Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.perInstrument.map((ins) => (
+                    <tr key={ins.symbol}>
+                      <td>
+                        <span className="font-medium">{ins.symbol}</span>{" "}
+                        <span className="text-xs text-muted">{ins.name}</span>
+                      </td>
+                      <td>
+                        {ins.trades}
+                        {ins.research ? " · research" : ""}
+                      </td>
+                      <td className={`text-right ${ins.netProfit >= 0 ? "text-accent" : "text-danger"}`}>
+                        {fmtUsd(ins.netProfit, true)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-      </Panel>
+          </Panel>
 
-      <Panel title="Deployment plan" subtitle="How these signals get traded on funded accounts.">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {data.deploymentPlan.map((p) => (
-            <div key={p.symbol} className="rounded-md border border-panel-border/60 bg-black/20 p-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="font-mono text-sm">{p.symbol}</span>
-                <span className="text-[11px] text-muted">{p.deployed ? "market deployed" : "not yet deployed"}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <div className="text-muted">risk / trade</div>
-                  <div className="font-mono">{fmtUsd(p.riskPerTrade)}</div>
-                </div>
-                <div>
-                  <div className="text-muted">accounts</div>
-                  <div className="font-mono">
-                    {p.currentAccounts} → {p.maxAccounts}
+          <Panel title="Deployment plan" tag="gate to live" subtitle="How these signals get traded on funded accounts.">
+            <div className="flex flex-col gap-4">
+              {data.deploymentPlan.map((p) => (
+                <div key={p.symbol}>
+                  <div className="mb-1.5 flex flex-wrap items-baseline gap-2.5">
+                    <span className="text-[15px] font-medium">{p.symbol}</span>
+                    <span className="mr-auto text-xs text-muted">
+                      {fmtUsd(p.riskPerTrade)}/trade · {p.currentAccounts}→{p.maxAccounts} accounts
+                    </span>
+                    <span className="text-xs text-brand-2">
+                      {p.liveTradesToward}/{p.gateTarget}
+                    </span>
                   </div>
-                </div>
-                <div>
-                  <div className="text-muted">gate</div>
-                  <div className="font-mono">
-                    {p.liveTradesToward}/{p.gateTarget}
+                  <div className="h-[5px] overflow-hidden rounded-full bg-black/30">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        background: "linear-gradient(90deg,#5d5294,#b5abfc)",
+                        width: `${Math.min(100, Math.round((p.liveTradesToward / p.gateTarget) * 100))}%`,
+                      }}
+                    />
                   </div>
+                  <p className="mt-2 text-[11px] text-muted/80">
+                    Live record: {p.liveStats.closedTrades} trades, {Math.round(p.liveStats.winRate * 100)}% won,{" "}
+                    {fmtUsd(p.liveStats.netProfit, true)} at the engine&apos;s own sizing. At the plan&apos;s size that
+                    record is {fmtUsd(p.rescaledNet, true)}.
+                  </p>
                 </div>
-              </div>
-              <p className="mt-2 text-[11px] text-muted/80">
-                {Math.round((p.liveTradesToward / p.gateTarget) * 100)}% to the gate. Live record so far:{" "}
-                {p.liveStats.closedTrades} trades, {Math.round(p.liveStats.winRate * 100)}% won,{" "}
-                {fmtUsd(p.liveStats.netProfit, true)} at the engine&apos;s own sizing. At the plan&apos;s{" "}
-                {fmtUsd(p.riskPerTrade)} risk across {p.currentAccounts} account
-                {p.currentAccounts === 1 ? "" : "s"} that same record is {fmtUsd(p.rescaledNet, true)}.
-              </p>
-            </div>
-          ))}
-        </div>
-      </Panel>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Panel title="Price data health" subtitle="Freshness of the live prices feeding the dashboard.">
-          <div className="flex flex-col gap-2">
-            {data.priceHealth.map((p) => (
-              <div key={p.symbol} className="flex items-center justify-between text-sm">
-                <span>{INSTRUMENT_LABEL[p.symbol]}</span>
-                <span className="font-mono text-muted">
-                  {fmtPrice(p.lastPrice)} · {p.minutesAgo}m ago
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3 text-[11px] text-muted/70">
-            {data.priceHealth.every((p) => p.crossCheckOk)
-              ? "All price cross-checks passing."
-              : "Some price cross-checks are failing."}
-          </p>
-        </Panel>
-
-        <Panel title="Upcoming economic news (next 24h)" subtitle="No new trades 1 min before/after high-impact releases, no holding through them, and no trades when the ORB session sits between two high-impact releases.">
-          {data.econEvents.length === 0 ? (
-            <p className="text-sm text-muted">Nothing scheduled in the next 24 hours.</p>
-          ) : (
-            <ul className="flex flex-col gap-2 text-sm">
-              {data.econEvents.map((e) => (
-                <li key={e.id} className="flex items-center justify-between">
-                  <span>
-                    {e.tagged && <span className="mr-1.5 text-warn">●</span>}
-                    {e.country} {e.title}
-                  </span>
-                  <span className="font-mono text-xs text-muted">{fmtDateTime(e.releaseAt)}</span>
-                </li>
               ))}
-            </ul>
-          )}
-        </Panel>
+            </div>
+          </Panel>
+
+          <Panel title="Open positions" subtitle="Flatten needs the desk key entered in Engine controls below.">
+            {data.openPositions.length === 0 ? (
+              <p className="text-sm text-muted">Flat. The desk is watching.</p>
+            ) : (
+              <ul className="flex flex-col gap-2.5">
+                {data.openPositions.map((p) => (
+                  <li key={p.id} className="flex items-center gap-4 rounded-[10px] bg-black/20 p-3.5" style={{ boxShadow: "var(--shadow-sm)" }}>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[15px] font-medium">
+                        {p.symbol}{" "}
+                        <span className={p.direction === "LONG" ? "text-xs tracking-wide text-accent" : "text-xs tracking-wide text-danger"}>
+                          {p.direction}
+                        </span>{" "}
+                        <span className="text-xs text-muted">{SESSION_LABEL[p.session]}</span>
+                      </div>
+                      <div className="mt-0.5 text-xs text-muted">
+                        entry {fmtPrice(p.entryPrice)} · stop {fmtPrice(p.stopPrice)} · target {fmtPrice(p.targetPrice)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => flattenOne(p.id)}
+                      disabled={flattening === p.id}
+                      className="btn btn-danger flex-none"
+                    >
+                      {flattening === p.id ? "Flattening…" : "Flatten"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {flattenMessage && (
+              <p className={`mt-3 text-xs ${flattenMessage.error ? "text-danger" : "text-accent"}`}>{flattenMessage.text}</p>
+            )}
+
+            <div className="mt-5">
+              <h3 className="mb-3 text-[13px] font-medium">Price-data health</h3>
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}>
+                {data.priceHealth.map((p) => (
+                  <div key={p.symbol} className="flex items-center gap-2 rounded-md bg-black/20 px-2.5 py-2">
+                    <span
+                      className="h-[7px] w-[7px] flex-none rounded-full"
+                      style={{ background: p.crossCheckOk ? "var(--accent)" : "var(--warn)" }}
+                    />
+                    <span className="text-[13px] font-medium">{p.symbol}</span>
+                    <span className="ml-auto text-[11px] text-muted">
+                      {fmtPrice(p.lastPrice)} · {p.minutesAgo}m
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="High-impact news" subtitle="No new trades 1 min before/after high-impact releases, no holding through them.">
+            {data.econEvents.length === 0 ? (
+              <p className="text-sm text-muted">Nothing scheduled in the next 24 hours.</p>
+            ) : (
+              <div className="flex flex-col">
+                {data.econEvents.map((e) => (
+                  <div key={e.id} className="flex items-center gap-3 py-2.5" style={{ boxShadow: "0 1px 0 var(--panel-border)" }}>
+                    <span className="w-16 flex-none text-[13px] text-brand-2">{fmtDateTime(e.releaseAt)}</span>
+                    <span className="min-w-0 flex-1 text-[13px]">
+                      {e.tagged && <span className="mr-1.5 text-warn">●</span>}
+                      {e.country} {e.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        <TradingAlgorithms trades={data.tradeLog} />
+
+        <ActivityLog trades={data.tradeLog} signals={data.signals} />
+
+        <div id="engine-controls">
+          <EngineControls
+            instruments={data.instruments}
+            openPositionCount={data.openPositions.length}
+            maxLossBreached={data.risk.maxLossBreached}
+            liveExecutionMode={data.liveExecutionMode}
+            deskKey={deskKey}
+            setDeskKey={setDeskKey}
+            onChanged={load}
+            onFlattenAll={(key) => flatten(key)}
+            accessToken={accessToken}
+          />
+        </div>
+
+        <footer className="py-4 text-center text-[11px] text-muted/60">
+          Paper record: {fmtUsd(data.stats.full.netProfit, true)} net over {data.stats.full.closedTrades} simulated
+          trades in total, of which the tradeable set is {fmtUsd(data.stats.tradeable.netProfit, true)} over{" "}
+          {data.stats.tradeable.closedTrades}. Real-money orders are always placed by a human — the bot never trades
+          a live account on its own.
+        </footer>
+      </main>
+    </>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  sub,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  valueColor?: string;
+}) {
+  return (
+    <div className="bg-background px-4.5 py-4">
+      <div className="text-[11px] tracking-[0.1em] text-muted uppercase">{label}</div>
+      <div className="mt-2 text-2xl font-semibold sm:text-[26px]" style={{ color: valueColor }}>
+        {value}
       </div>
-
-      <Panel
-        title="Open positions"
-        subtitle="Flatten needs the desk key entered in Engine controls below."
-      >
-        {data.openPositions.length === 0 ? (
-          <p className="text-sm text-muted">Flat. The desk is watching.</p>
-        ) : (
-          <ul className="flex flex-col gap-2 text-sm">
-            {data.openPositions.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3">
-                <span>
-                  <span className={p.direction === "LONG" ? "text-accent" : "text-danger"}>{p.direction}</span>{" "}
-                  {INSTRUMENT_LABEL[p.symbol]} · {SESSION_LABEL[p.session]}
-                </span>
-                <span className="flex items-center gap-3">
-                  <span className="font-mono text-xs text-muted">
-                    in at {fmtPrice(p.entryPrice)} · stop {fmtPrice(p.stopPrice)} · target {fmtPrice(p.targetPrice)}
-                  </span>
-                  <button
-                    onClick={() => flattenOne(p.id)}
-                    disabled={flattening === p.id}
-                    className="rounded border border-danger/50 px-2 py-1 text-xs text-danger hover:bg-danger/10 disabled:opacity-50"
-                  >
-                    {flattening === p.id ? "Flattening…" : "Flatten"}
-                  </button>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {flattenMessage && (
-          <p className={`mt-3 text-xs ${flattenMessage.error ? "text-danger" : "text-accent"}`}>
-            {flattenMessage.text}
-          </p>
-        )}
-      </Panel>
-
-      <ActivityLog trades={data.tradeLog} signals={data.signals} />
-
-      <EngineControls
-        instruments={data.instruments}
-        openPositionCount={data.openPositions.length}
-        maxLossBreached={data.risk.maxLossBreached}
-        liveExecutionMode={data.liveExecutionMode}
-        deskKey={deskKey}
-        setDeskKey={setDeskKey}
-        onChanged={load}
-        onFlattenAll={(key) => flatten(key)}
-        accessToken={accessToken}
-      />
-
-      <footer className="py-4 text-center text-[11px] text-muted/60">
-        Paper record: {fmtUsd(data.stats.full.netProfit, true)} net over {data.stats.full.closedTrades}{" "}
-        simulated trades in total, of which the tradeable set is {fmtUsd(data.stats.tradeable.netProfit, true)}{" "}
-        over {data.stats.tradeable.closedTrades}. Real-money orders are always placed by a human — the bot
-        never trades a live account on its own.
-      </footer>
-    </main>
+      <div className="mt-0.5 text-xs text-muted">{sub}</div>
+    </div>
   );
 }
 
 function StatGrid({ stats }: { stats: DashboardData["stats"]["tradeable"] }) {
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-      <StatTile label="closed trades" value={String(stats.closedTrades)} />
-      <StatTile label="win rate" value={`${Math.round(stats.winRate * 100)}%`} />
-      <StatTile label="net profit" value={fmtUsd(stats.netProfit, true)} />
-      <StatTile label="profit / $1 risked" value={stats.profitPerDollarRisked.toFixed(2)} />
-      <StatTile label="worst losing stretch" value={fmtUsd(stats.worstLosingStretch)} />
+    <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+      <MiniStat label="closed trades" value={String(stats.closedTrades)} />
+      <MiniStat label="win rate" value={`${Math.round(stats.winRate * 100)}%`} />
+      <MiniStat label="net profit" value={fmtUsd(stats.netProfit, true)} valueColor={stats.netProfit >= 0 ? "var(--accent)" : "var(--danger)"} />
+      <MiniStat label="profit / $1 risked" value={stats.profitPerDollarRisked.toFixed(2)} />
+      <MiniStat label="worst losing stretch" value={fmtUsd(stats.worstLosingStretch)} />
+    </div>
+  );
+}
+
+function MiniStat({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
+  return (
+    <div>
+      <div className="text-[11px] tracking-wide text-muted uppercase">{label}</div>
+      <div className="mt-1 text-[19px] font-semibold" style={{ color: valueColor }}>
+        {value}
+      </div>
     </div>
   );
 }

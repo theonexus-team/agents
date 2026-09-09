@@ -63,75 +63,56 @@ export function RunBacktestForm({
       subtitle="Queues a run against whatever bars are already ingested locally — it doesn't run instantly. A scheduled task on your machine (theonexus-backtest-worker) picks up queued runs every 10 minutes and executes them, since the strategy engine only runs locally, not on Vercel."
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <Field label="Strategy">
-          <select
-            value={strategy}
-            onChange={(e) => setStrategy(e.target.value)}
-            className="rounded border border-panel-border bg-black/20 px-2 py-1.5 text-sm text-foreground"
-          >
+        <div className="field">
+          <label htmlFor="bt-strat">Strategy</label>
+          <select id="bt-strat" value={strategy} onChange={(e) => setStrategy(e.target.value)} className="input">
             {STRATEGIES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="Instrument">
-          <select
-            value={symbol}
-            onChange={(e) => setSymbol(e.target.value)}
-            className="rounded border border-panel-border bg-black/20 px-2 py-1.5 text-sm text-foreground"
-          >
+        </div>
+        <div className="field">
+          <label htmlFor="bt-inst">Instrument</label>
+          <select id="bt-inst" value={symbol} onChange={(e) => setSymbol(e.target.value)} className="input">
             {SYMBOLS.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
           </select>
-        </Field>
-        <Field label="From">
+        </div>
+        <div className="field">
+          <label htmlFor="bt-from">From</label>
           <input
+            id="bt-from"
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded border border-panel-border bg-black/20 px-2 py-1.5 text-sm text-foreground"
+            className="input"
           />
-        </Field>
-        <Field label="To">
+        </div>
+        <div className="field">
+          <label htmlFor="bt-to">To</label>
+          <input id="bt-to" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="input" />
+        </div>
+        <div className="field">
+          <label htmlFor="bt-key">Desk key</label>
           <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded border border-panel-border bg-black/20 px-2 py-1.5 text-sm text-foreground"
-          />
-        </Field>
-        <Field label="Desk key">
-          <input
+            id="bt-key"
             type="password"
             value={deskKey}
             onChange={(e) => setDeskKey(e.target.value)}
             placeholder="••••••••••••"
-            className="w-40 rounded border border-panel-border bg-black/30 px-2 py-1.5 font-mono text-sm outline-none focus:border-accent"
+            className="input w-40"
           />
-        </Field>
-        <button
-          onClick={submit}
-          disabled={busy}
-          className="rounded border border-accent/50 px-3 py-1.5 text-xs font-medium text-accent hover:bg-accent/10 disabled:opacity-40"
-        >
+        </div>
+        <button onClick={submit} disabled={busy} className="btn btn-primary">
           {busy ? "Queuing…" : "Queue run"}
         </button>
       </div>
       {message && <p className={`mt-3 text-xs ${message.error ? "text-danger" : "text-accent"}`}>{message.text}</p>}
     </Panel>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[11px] uppercase tracking-wide text-muted">{label}</span>
-      {children}
-    </label>
   );
 }

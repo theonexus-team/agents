@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { fmtCountdown } from "@/lib/format";
 import type { DashboardData } from "@/lib/types";
-import { Panel } from "./Panel";
 
 export function SessionCountdowns({ sessions }: { sessions: DashboardData["sessions"] }) {
   const [now, setNow] = useState(() => Date.now());
@@ -13,20 +12,44 @@ export function SessionCountdowns({ sessions }: { sessions: DashboardData["sessi
     return () => clearInterval(id);
   }, []);
 
+  const withRemaining = useMemo(
+    () => sessions.map((s) => ({ ...s, remaining: new Date(s.opensAt).getTime() - now })),
+    [sessions, now]
+  );
+  const nextSession = withRemaining.reduce(
+    (soonest, s) => (s.remaining < soonest.remaining ? s : soonest),
+    withRemaining[0]
+  );
+
   return (
-    <Panel title="Markets open in…" subtitle="Countdown to each session open the strategy trades. It only acts in the first two hours after an open.">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {sessions.map((s) => {
-          const remaining = new Date(s.opensAt).getTime() - now;
-          return (
-            <div key={s.session} className="rounded-md border border-panel-border/60 bg-black/20 px-3 py-2.5 text-center">
-              <div className="text-[11px] uppercase tracking-wide text-muted">{s.label}</div>
-              <div className="mt-1 font-mono text-xl text-accent">{fmtCountdown(remaining)}</div>
-              <div className="mt-0.5 text-[10px] text-muted/70">opens in</div>
+    <section className="grid grid-cols-2 gap-3.5 sm:grid-cols-4">
+      {withRemaining.map((s) => {
+        const active = s.session === nextSession?.session;
+        return (
+          <div
+            key={s.session}
+            className="rounded-[14px] p-4.5"
+            style={
+              active
+                ? { background: "linear-gradient(160deg,#262a60 0%,#20233f 100%)", boxShadow: "0 0 0 1px #3a3f76" }
+                : { background: "var(--panel)", boxShadow: "var(--shadow-sm)" }
+            }
+          >
+            <div
+              className="text-[11px] tracking-[0.14em] uppercase"
+              style={{ color: active ? "#b9b4ea" : "var(--muted)" }}
+            >
+              {s.label}
             </div>
-          );
-        })}
-      </div>
-    </Panel>
+            <div className="mt-2.5 text-[28px] leading-none font-semibold tracking-tight sm:text-[32px]">
+              {fmtCountdown(s.remaining)}
+            </div>
+            <div className="mt-1.5 text-xs" style={{ color: active ? "#9a95c9" : "var(--muted)" }}>
+              opens in
+            </div>
+          </div>
+        );
+      })}
+    </section>
   );
 }

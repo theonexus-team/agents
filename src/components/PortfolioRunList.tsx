@@ -18,21 +18,21 @@ export function PortfolioRunList({ portfolios }: { portfolios: PortfolioRunSumma
         </p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse text-left text-sm">
+          <table className="table min-w-[900px]">
             <thead>
-              <tr className="border-b border-panel-border text-[11px] uppercase tracking-wide text-muted">
-                <th className="px-2 py-2 font-medium">Portfolio</th>
-                <th className="px-2 py-2 font-medium">Sizing</th>
-                <th className="px-2 py-2 text-right font-medium">Legs</th>
-                <th className="px-2 py-2 text-right font-medium">Trades</th>
-                <th className="px-2 py-2 text-right font-medium">Net</th>
-                <th className="px-2 py-2 text-right font-medium">Max drawdown</th>
+              <tr>
+                <th>Portfolio</th>
+                <th>Sizing</th>
+                <th className="text-right">Legs</th>
+                <th className="text-right">Trades</th>
+                <th className="text-right">Net</th>
+                <th className="text-right">Max drawdown</th>
               </tr>
             </thead>
             <tbody>
               {portfolios.map((p) => (
-                <tr key={p.id} className="border-b border-panel-border/40 hover:bg-white/5">
-                  <td className="px-2 py-2">
+                <tr key={p.id} className="is-clickable">
+                  <td>
                     <Link href={`/backtests/portfolios/${p.id}`} className="text-foreground underline decoration-dotted">
                       {p.label}
                     </Link>
@@ -41,18 +41,16 @@ export function PortfolioRunList({ portfolios }: { portfolios: PortfolioRunSumma
                       {p.sourceNote ? ` · ${p.sourceNote}` : ""}
                     </div>
                   </td>
-                  <td className="px-2 py-2 text-xs text-muted">
+                  <td className="text-xs text-muted">
                     {p.sizingMode === "dynamic" ? "Dynamic ladder" : "Fixed"}
-                    {p.sizingMode === "dynamic" && (
-                      <div className="text-[10px]">ladder unit {fmtUsd(p.maxLossFromPeak)}</div>
-                    )}
+                    {p.sizingMode === "dynamic" && <div className="text-[10px]">ladder unit {fmtUsd(p.maxLossFromPeak)}</div>}
                   </td>
-                  <td className="px-2 py-2 text-right font-mono text-xs">{p.legCount}</td>
-                  <td className="px-2 py-2 text-right font-mono text-xs">{p.totalTrades}</td>
-                  <td className={`px-2 py-2 text-right font-mono text-xs ${p.totalNet >= 0 ? "text-accent" : "text-danger"}`}>
+                  <td className="text-right text-xs">{p.legCount}</td>
+                  <td className="text-right text-xs">{p.totalTrades}</td>
+                  <td className={`text-right text-xs ${p.totalNet >= 0 ? "text-accent" : "text-danger"}`}>
                     {fmtUsd(p.totalNet, true)}
                   </td>
-                  <td className="px-2 py-2 text-right font-mono text-xs text-muted">{fmtUsd(p.maxDrawdown)}</td>
+                  <td className="text-right text-xs text-muted">{fmtUsd(p.maxDrawdown)}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,14 +1,47 @@
 @import "tailwindcss";
 
+/* ══════════════════════════════════════════════════════════════════════════
+   Nocturne — design tokens, ported from the Theonexus UI redesign.
+   Financial polarity (profit/loss/warning) keeps its own green/red/amber,
+   separate from the purple brand accent used for chrome — buttons, tabs,
+   links, focus rings, tags. See the .card/.btn/.field/.table classes below
+   for the component layer built on top of these tokens.
+   ══════════════════════════════════════════════════════════════════════ */
 :root {
-  --background: #08090c;
-  --panel: #0e1117;
-  --panel-border: #1e2530;
-  --foreground: #e6e9ef;
-  --muted: #7c8797;
-  --accent: #35d488;
-  --danger: #ff5d6c;
-  --warn: #f5b942;
+  --background: #161826;
+  --panel: #232532;
+  --panel-border: color-mix(in srgb, #e9e9ed 14%, transparent);
+  --foreground: #e9e9ed;
+  --muted: #9397ab;
+
+  /* financial polarity */
+  --accent: #7fd6a8;
+  --danger: #f08a9b;
+  --warn: #e6b567;
+
+  /* brand / chrome accent (distinct from the profit-green above) */
+  --brand: #9184d9;
+  --brand-2: #a7a1db;
+
+  --nx-neutral-100: #f3f5fe;
+  --nx-neutral-400: #b2b6ca;
+  --nx-neutral-500: #9397ab;
+  --nx-neutral-600: #75798c;
+  --nx-neutral-800: #3f424d;
+  --nx-neutral-900: #292b31;
+
+  --nx-brand-100: #f5f4ff;
+  --nx-brand-400: #b5abfc;
+  --nx-brand-700: #5d5294;
+  --nx-brand-800: #423a6a;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+
+  --shadow-sm: 0 0 0 1px color-mix(in srgb, #e9e9ed 10%, transparent);
+  --shadow-md: 0 0 0 1px color-mix(in srgb, #e9e9ed 16%, transparent), 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 0 0 1px color-mix(in srgb, #e9e9ed 22%, transparent), 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 @theme inline {
@@ -20,17 +53,215 @@
   --color-accent: var(--accent);
   --color-danger: var(--danger);
   --color-warn: var(--warn);
+  --color-brand: var(--brand);
+  --color-brand-2: var(--brand-2);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(120% 80% at 12% -10%, color-mix(in srgb, var(--brand) 10%, var(--background)) 0%, var(--background) 55%) fixed;
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.01em;
 }
 
 ::selection {
-  background: var(--accent);
-  color: #04120b;
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+  color: var(--foreground);
+}
+
+/* — rules — fade to transparent at both ends, a Nocturne signature */
+.hr {
+  height: 1px;
+  border: 0;
+  margin: 16px 0;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--panel-border) 48px,
+    var(--panel-border) calc(100% - 48px),
+    transparent
+  );
+}
+
+/* — buttons — */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.2;
+  color: var(--foreground);
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn-primary { color: var(--brand); border-color: var(--brand); }
+.btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--brand) 12%, transparent); }
+.btn-secondary { border-color: var(--panel-border); color: var(--foreground); }
+.btn-secondary:hover:not(:disabled) { background: color-mix(in srgb, var(--foreground) 7%, transparent); }
+.btn-ghost { color: var(--brand); padding-inline: 4px; }
+.btn-ghost:hover:not(:disabled) { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.btn-danger-solid { color: var(--danger); border-color: var(--danger); background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.btn-block { width: 100%; }
+
+/* — forms — */
+.field > label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 5px;
+  color: color-mix(in srgb, var(--foreground) 65%, transparent);
+}
+.input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--foreground);
+  caret-color: var(--brand);
+  background: color-mix(in srgb, black 25%, var(--panel));
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+.input:hover { border-color: color-mix(in srgb, var(--foreground) 40%, transparent); }
+.input:focus-visible { border-color: var(--brand); }
+
+/* — cards — */
+.card {
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+}
+.card-kicker {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+/* — tags — */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.tag-accent { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent); }
+.tag-brand { background: var(--nx-brand-800); color: var(--nx-brand-100); }
+.tag-neutral { background: var(--nx-neutral-800); color: var(--nx-neutral-100); }
+.tag-danger { background: color-mix(in srgb, var(--danger) 20%, transparent); color: var(--danger); }
+.tag-warn { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--warn); }
+.tag-outline { border: 1px solid var(--brand); color: var(--brand); }
+
+/* — tables — row rules fade at both ends like .hr */
+.table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--foreground) 60%, transparent);
+  padding: 8px;
+  white-space: nowrap;
+}
+.table thead tr {
+  background: linear-gradient(to right, transparent, var(--panel-border) 24px, var(--panel-border) calc(100% - 24px), transparent)
+    no-repeat bottom / 100% 1px;
+}
+.table td { padding: 8px; }
+.table tbody tr {
+  background: linear-gradient(
+      to right,
+      transparent,
+      color-mix(in srgb, var(--foreground) 8%, transparent) 24px,
+      color-mix(in srgb, var(--foreground) 8%, transparent) calc(100% - 24px),
+      transparent
+    )
+    no-repeat bottom / 100% 1px;
+}
+.table tbody tr.is-clickable { cursor: pointer; }
+.table tbody tr.is-clickable:hover {
+  background:
+    linear-gradient(color-mix(in srgb, var(--foreground) 4%, transparent), color-mix(in srgb, var(--foreground) 4%, transparent))
+      no-repeat 0 0 / 100% 100%,
+    linear-gradient(
+        to right,
+        transparent,
+        color-mix(in srgb, var(--foreground) 8%, transparent) 24px,
+        color-mix(in srgb, var(--foreground) 8%, transparent) calc(100% - 24px),
+        transparent
+      )
+      no-repeat bottom / 100% 1px;
+}
+
+/* — dialog — */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--nx-neutral-900) 60%, transparent);
+}
+.dialog {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: var(--shadow-lg);
+}
+.dialog-title { font-family: var(--font-heading); font-weight: 500; font-size: 17px; }
+
+/* — nav tabs (site header) — */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+.nx-tab {
+  font-family: var(--font-heading);
+  font-weight: 500;
+  font-size: 13px;
+  padding: 7px 13px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  border: 1px solid transparent;
+  color: var(--muted);
+  background: transparent;
+  text-decoration: none;
+  transition: color 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+.nx-tab:hover { color: var(--foreground); }
+.nx-tab[data-active="true"] {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PortfolioRunList } from "@/components/PortfolioRunList";
+import { SiteHeader } from "@/components/SiteHeader";
 import type { PortfolioRunSummary } from "@/lib/types";
 
 export default function PortfoliosPage() {
@@ -20,21 +21,24 @@ export default function PortfoliosPage() {
   }, []);
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6">
-      <header className="flex flex-col gap-1">
-        <Link href="/backtests" className="w-fit text-xs text-muted underline decoration-dotted hover:text-foreground">
-          ← All backtests
-        </Link>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Portfolios</h1>
-        <p className="text-xs text-muted">
-          Multiple strategy legs run together on one shared account, with dynamic position sizing responding to the
-          combined equity curve — not each strategy&apos;s backtest summed after the fact.
-        </p>
-      </header>
+    <>
+      <SiteHeader status={{ label: "Backtests", tone: "neutral" }} />
+      <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col gap-5 px-4 py-6 sm:px-6">
+        <header className="flex flex-col gap-1">
+          <Link href="/backtests" className="nx-tab w-fit px-0">
+            ← All backtests
+          </Link>
+          <h1 className="m-0 mt-1 mb-1 text-[26px] font-medium text-foreground">Portfolios</h1>
+          <p className="m-0 text-xs text-muted">
+            Multiple strategy legs run together on one shared account, with dynamic position sizing responding to the
+            combined equity curve — not each strategy&apos;s backtest summed after the fact.
+          </p>
+        </header>
 
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {!error && !portfolios && <p className="text-sm text-muted">Loading…</p>}
-      {portfolios && <PortfolioRunList portfolios={portfolios} />}
-    </main>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {!error && !portfolios && <p className="text-sm text-muted">Loading…</p>}
+        {portfolios && <PortfolioRunList portfolios={portfolios} />}
+      </main>
+    </>
   );
 }
