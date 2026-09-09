@@ -7,9 +7,9 @@
  * stored/reported under.
  */
 const STRATEGY_DISPLAY_NAME: Record<string, string> = {
-  "1m ORB + VWAP": "The Ascendant",
-  "ORB + VWAP": "The Ascendant",
-  orb_vwap: "The Ascendant",
+  "1m ORB + VWAP": "Ascendant",
+  "ORB + VWAP": "Ascendant",
+  orb_vwap: "Ascendant",
   "Algo 2 First-Touch Zones": "The Threshold",
   "Algo 2 First-Touch": "The Threshold",
   algo2_first_touch: "The Threshold",
