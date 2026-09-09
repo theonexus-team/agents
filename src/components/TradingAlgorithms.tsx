@@ -1,4 +1,5 @@
 import { fmtUsd } from "@/lib/format";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import type { TradeRow } from "@/lib/types";
 
 /**
@@ -22,7 +23,7 @@ export function TradingAlgorithms({ trades }: { trades: TradeRow[] }) {
     const worstTrade = Math.min(...rows.map((r) => r.net));
     const symbols = Array.from(new Set(rows.map((r) => r.symbol)));
     return {
-      name,
+      name: strategyDisplayName(name),
       scope: symbols.join(" · "),
       trades: rows.length,
       winRate: rows.length ? wins / rows.length : 0,

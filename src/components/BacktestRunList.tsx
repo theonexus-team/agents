@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Panel } from "./Panel";
 import { fmtDateTime, fmtPct, fmtUsd } from "@/lib/format";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { INSTRUMENT_LABEL, type BacktestRunSummary } from "@/lib/types";
 
 export function BacktestRunList({ runs }: { runs: BacktestRunSummary[] }) {
@@ -31,7 +32,7 @@ export function BacktestRunList({ runs }: { runs: BacktestRunSummary[] }) {
           <option value="all">All strategies</option>
           {strategies.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {strategyDisplayName(s)}
             </option>
           ))}
         </select>
@@ -73,7 +74,7 @@ export function BacktestRunList({ runs }: { runs: BacktestRunSummary[] }) {
                   <tr key={r.id} className="is-clickable">
                     <td>
                       <Link href={`/backtests/${r.id}`} className="text-foreground underline decoration-dotted">
-                        {r.strategy}
+                        {strategyDisplayName(r.strategy)}
                       </Link>
                       <div className="text-xs text-muted">
                         {INSTRUMENT_LABEL[r.symbol]} · {r.timeframe} · {r.mode === "FORWARD" ? "Forward" : "Historical"}

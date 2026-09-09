@@ -7,6 +7,7 @@ import { Panel, StatTile } from "@/components/Panel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TradeLogTable } from "@/components/TradeLogTable";
 import { fmtPct, fmtUsd } from "@/lib/format";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { INSTRUMENT_LABEL, type BacktestRunDetail } from "@/lib/types";
 
 export default function BacktestDetailPage({ params }: PageProps<"/backtests/[runId]">) {
@@ -35,7 +36,7 @@ export default function BacktestDetailPage({ params }: PageProps<"/backtests/[ru
           {run && (
             <>
               <h1 className="m-0 mt-1 text-[26px] font-medium text-foreground">
-                {run.strategy} — {INSTRUMENT_LABEL[run.symbol]}
+                {strategyDisplayName(run.strategy)} — {INSTRUMENT_LABEL[run.symbol]}
               </h1>
               <p className="m-0 text-xs text-muted">
                 {run.mode === "FORWARD" ? "Forward test" : "Historical backtest"} · {run.timeframe} ·{" "}

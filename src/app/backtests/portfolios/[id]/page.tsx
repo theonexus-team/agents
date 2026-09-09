@@ -7,6 +7,7 @@ import { Panel, StatTile } from "@/components/Panel";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TradeLogTable } from "@/components/TradeLogTable";
 import { fmtPct, fmtUsd } from "@/lib/format";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { INSTRUMENT_LABEL, type PortfolioRunDetail } from "@/lib/types";
 
 export default function PortfolioDetailPage({ params }: PageProps<"/backtests/portfolios/[id]">) {
@@ -87,7 +88,7 @@ export default function PortfolioDetailPage({ params }: PageProps<"/backtests/po
                       <tr key={leg.runId}>
                         <td>
                           <Link href={`/backtests/${leg.runId}`} className="text-foreground underline decoration-dotted">
-                            {leg.strategy}
+                            {strategyDisplayName(leg.strategy)}
                           </Link>
                         </td>
                         <td className="text-xs text-muted">{INSTRUMENT_LABEL[leg.symbol]}</td>

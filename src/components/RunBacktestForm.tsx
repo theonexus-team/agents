@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { Panel } from "./Panel";
 
 //: Must match backtest/strategies/__init__.py's STRATEGIES dict.
@@ -68,7 +69,7 @@ export function RunBacktestForm({
           <select id="bt-strat" value={strategy} onChange={(e) => setStrategy(e.target.value)} className="input">
             {STRATEGIES.map((s) => (
               <option key={s} value={s}>
-                {s}
+                {strategyDisplayName(s)}
               </option>
             ))}
           </select>

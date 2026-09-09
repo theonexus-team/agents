@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { fmtDateTime, fmtHeld, fmtPrice, fmtUsd } from "@/lib/format";
 import { INSTRUMENT_LABEL, OUTCOME_LABEL, SESSION_LABEL, type TradeRow } from "@/lib/types";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { Panel } from "./Panel";
 
 const PAGE_SIZE = 15;
@@ -52,7 +53,7 @@ export function TradeLogTable({ trades }: { trades: TradeRow[] }) {
                   <span className="text-muted">{INSTRUMENT_LABEL[t.symbol]}</span>
                 </td>
                 <td className="whitespace-nowrap text-xs text-muted">{SESSION_LABEL[t.session]}</td>
-                <td className="whitespace-nowrap text-xs text-muted">{t.strategy}</td>
+                <td className="whitespace-nowrap text-xs text-muted">{strategyDisplayName(t.strategy)}</td>
                 <td className="whitespace-nowrap text-xs">{fmtPrice(t.entryPrice)}</td>
                 <td className="whitespace-nowrap text-xs">{fmtPrice(t.exitPrice)}</td>
                 <td className="whitespace-nowrap text-xs text-muted">{fmtHeld(t.openedAt, t.closedAt)}</td>
@@ -98,7 +99,7 @@ export function TradeLogTable({ trades }: { trades: TradeRow[] }) {
               <dt className="text-muted">Session</dt>
               <dd className="text-right">{SESSION_LABEL[selected.session]}</dd>
               <dt className="text-muted">Strategy</dt>
-              <dd className="text-right">{selected.strategy}</dd>
+              <dd className="text-right">{strategyDisplayName(selected.strategy)}</dd>
               <dt className="text-muted">Opened</dt>
               <dd className="text-right text-xs">{fmtDateTime(selected.openedAt)}</dd>
               <dt className="text-muted">Closed</dt>

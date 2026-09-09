@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { fmtUsd } from "@/lib/format";
 import type { TradeRow } from "@/lib/types";
+
+function fmtPointDate(t: number): string {
+  return new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 const RANGES: { label: string; days: number }[] = [
   { label: "7D", days: 7 },
@@ -31,6 +35,8 @@ export function DashboardEquityCurve({
   trades: TradeRow[];
 }) {
   const [rangeDays, setRangeDays] = useState<number>(90);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   const fullSeries = useMemo(() => {
     const chronological = [...trades].sort((a, b) => (a.closedAt < b.closedAt ? -1 : 1));
@@ -68,6 +74,18 @@ export function DashboardEquityCurve({
 
   const axis = [0, 1, 2, 3, 4].map((i) => fmtUsd(yMax - ((yMax - yMin) * i) / 4));
 
+  function updateHover(clientX: number) {
+    const rect = chartRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return;
+    const frac = Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
+    const idx = Math.round(frac * (series.length - 1));
+    setHoverIdx(Math.min(Math.max(idx, 0), series.length - 1));
+  }
+
+  const hovered = hoverIdx !== null ? series[hoverIdx] : null;
+  const hoveredChange = hovered ? hovered.v - series[0].v : 0;
+  const hoveredXPct = hoverIdx !== null ? (x(hoverIdx) / WIDTH) * 100 : 0;
+
   return (
     <div className="card p-5" style={{ boxShadow: "var(--shadow-sm)" }}>
       <div className="mb-4 flex flex-wrap items-start gap-4">
@@ -103,7 +121,13 @@ export function DashboardEquityCurve({
       </div>
 
       <div className="flex gap-3">
-        <div className="relative h-[250px] min-w-0 flex-1">
+        <div
+          ref={chartRef}
+          className="relative h-[250px] min-w-0 flex-1 touch-none select-none"
+          onPointerMove={(e) => updateHover(e.clientX)}
+          onPointerDown={(e) => updateHover(e.clientX)}
+          onPointerLeave={() => setHoverIdx(null)}
+        >
           <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} preserveAspectRatio="none" className="block h-full w-full overflow-visible">
             <defs>
               <linearGradient id="eqDashboard" x1="0" y1="0" x2="0" y2="1">
@@ -120,6 +144,22 @@ export function DashboardEquityCurve({
               <line x1="0" y1={peakY} x2={WIDTH} y2={peakY} stroke="#7fd6a8" strokeWidth="1" strokeDasharray="4 5" opacity="0.7" />
             )}
             <line x1="0" y1={startY} x2={WIDTH} y2={startY} stroke="#595d6c" strokeWidth="1" strokeDasharray="2 6" />
+            {hovered && hoverIdx !== null && (
+              <>
+                <line
+                  x1={x(hoverIdx)}
+                  y1="0"
+                  x2={x(hoverIdx)}
+                  y2={HEIGHT}
+                  stroke="var(--muted)"
+                  strokeWidth="1"
+                  strokeDasharray="3 4"
+                  opacity="0.7"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <circle cx={x(hoverIdx)} cy={y(hovered.v)} r="4.5" fill="#b5abfc" stroke="var(--panel)" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              </>
+            )}
           </svg>
           {peakVisible && (
             <div
@@ -127,6 +167,23 @@ export function DashboardEquityCurve({
               style={{ color: "#7fd6a8", top: `${Math.min(Math.max((peakY / HEIGHT) * 100, 0), 96)}%` }}
             >
               peak {fmtUsd(peakEquity)}
+            </div>
+          )}
+          {hovered && (
+            <div
+              className="pointer-events-none absolute top-2 z-10 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-xs whitespace-nowrap"
+              style={{
+                background: "var(--panel)",
+                boxShadow: "var(--shadow-md)",
+                left: `${Math.min(Math.max(hoveredXPct, 12), 88)}%`,
+                transform: "translateX(-50%)",
+              }}
+            >
+              <span className="text-muted">{fmtPointDate(hovered.t)}</span>
+              <span className="font-semibold text-foreground">{fmtUsd(hovered.v)}</span>
+              <span className={hoveredChange >= 0 ? "text-accent" : "text-danger"}>
+                {fmtUsd(hoveredChange, true)} since start
+              </span>
             </div>
           )}
         </div>

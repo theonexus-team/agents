@@ -10,6 +10,7 @@ import { SessionCountdowns } from "@/components/SessionCountdowns";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TradingAlgorithms } from "@/components/TradingAlgorithms";
 import { fmtDateTime, fmtPrice, fmtRelative, fmtUsd } from "@/lib/format";
+import { strategyDisplayName } from "@/lib/strategyNames";
 import { INSTRUMENT_LABEL, SESSION_LABEL, type DashboardData } from "@/lib/types";
 
 /**
@@ -133,7 +134,7 @@ export function Dashboard({
           t.symbol,
           t.direction,
           t.session,
-          t.strategy,
+          strategyDisplayName(t.strategy),
           t.entryPrice,
           t.exitPrice,
           t.outcome,
@@ -189,7 +190,7 @@ export function Dashboard({
               {data.account ? "Client account" : "Live strategy"}
             </div>
             <h1 className="m-0 mb-1.5 text-[28px] font-medium text-foreground sm:text-[34px]">
-              {data.account ? data.account.name : "1-min ORB · VWAP"}
+              {data.account ? data.account.name : "The Ascendant · The Threshold"}
             </h1>
             <p className="m-0 text-[13px] text-muted">
               Four futures instruments, Tokyo/Shanghai/London/New York opens · last check-in{" "}
