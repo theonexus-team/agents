@@ -34,7 +34,6 @@ const CORRELATED_SYMBOL: Partial<Record<InstrumentSymbol, InstrumentSymbol>> = {
  * strings — "1" for a 1-minute chart, "15" for 15-minute, etc.
  */
 const LIVE_EXECUTION_ALLOWLIST: { symbol: (typeof SYMBOLS)[number]; strategy: string; timeframe: string }[] = [
-  { symbol: "MNQ", strategy: "Algo 2 First-Touch Zones", timeframe: "15" },
   { symbol: "HG", strategy: "1m ORB + VWAP", timeframe: "1" },
   { symbol: "MNQ", strategy: "1m ORB + VWAP", timeframe: "1" },
 ];

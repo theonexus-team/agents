@@ -7,7 +7,7 @@ export const SESSIONS = ["TOKYO", "SHANGHAI", "LONDON", "NEW_YORK"] as const;
 /** The two strategies actually wired up to fire live/paper signals — used to
  * validate anything Trading Analyst's Adjuster tries to write, so a malformed or
  * hallucinated strategy name can't silently create a dead allowlist entry. */
-export const LIVE_STRATEGIES = ["1m ORB + VWAP", "Algo 2 First-Touch Zones"] as const;
+export const LIVE_STRATEGIES = ["1m ORB + VWAP", "OB Reversal"] as const;
 
 /**
  * Which (symbol, strategy, session) combos are currently trusted to trade AT ALL —

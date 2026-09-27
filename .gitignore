@@ -56,3 +56,4 @@ venv/
 # claude code local settings
 .claude/settings.local.json
 ninjatrader-executor/logs/
+.backups/

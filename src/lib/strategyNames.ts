@@ -13,6 +13,8 @@ const STRATEGY_DISPLAY_NAME: Record<string, string> = {
   "Algo 2 First-Touch Zones": "The Threshold",
   "Algo 2 First-Touch": "The Threshold",
   algo2_first_touch: "The Threshold",
+  "OB Reversal": "Revenge",
+  "Theonexus - OB Reversal": "Revenge",
 };
 
 export function strategyDisplayName(raw: string): string {
