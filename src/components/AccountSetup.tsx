@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Panel } from "@/components/Panel";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -84,6 +85,12 @@ export function AccountSetup({ token }: { token: string }) {
       <SiteHeader showNav={false} />
       <main className="mx-auto flex w-full max-w-[720px] flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
         <div>
+          <Link
+            href={`/a/${token}`}
+            className="mb-3 inline-flex items-center gap-1.5 text-[13px] text-muted hover:text-foreground"
+          >
+            ← Back to dashboard
+          </Link>
           <div className="mb-2 text-[11px] tracking-[0.14em] text-brand uppercase">Setup</div>
           <h1 className="m-0 mb-1.5 text-[26px] font-medium text-foreground">
             {data ? `Connect ${data.name}'s TradingView` : "Connect your TradingView"}
