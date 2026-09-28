@@ -68,6 +68,14 @@ queued, and flips it to `completed` (with real trades) or `failed` (with a reaso
 `sourceNote`). Run `python worker.py` manually if you don't want to wait for the
 next scheduled pass.
 
+**On this Mac**, that scheduled task is a launchd agent at
+`~/Library/LaunchAgents/com.theonexus.backtest-worker.plist` (`StartInterval=600`),
+loaded with `launchctl load ~/Library/LaunchAgents/com.theonexus.backtest-worker.plist`
+— it starts automatically on login. Logs: `~/Library/Logs/theonexus-backtest-worker.log`.
+To stop it: `launchctl unload` that same plist path. It also requires a repo-root
+`.env` (not `.env.local`) with `DATABASE_URL` set — see `engine/db.py` — since it's a
+plain Python script, not part of the Next.js app's env loading.
+
 ## Adding a new strategy
 
 1. **Write it**: create `strategies/<name>.py`, subclass `engine.strategy.Strategy`.
