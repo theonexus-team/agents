@@ -183,6 +183,10 @@ model Account {
   installRequestedAt DateTime?
   /// Set by the Stripe webhook once the $100 one-time install payment succeeds.
   installPaidAt      DateTime?
+  /// Set when this Account is a mastermind member's own auto-provisioned
+  /// dashboard (see src/lib/memberAccount.ts), not a hand-created client one.
+  userId        String? @unique
+  user          User?   @relation(fields: [userId], references: [id])
 
   trades        Trade[]
   openPositions OpenPosition[]
@@ -190,9 +194,11 @@ model Account {
 }
 
 /// Mastermind member account (Google login). Deliberately separate from
-/// `Account` above, which is a per-client TRADING dashboard config keyed by an
+/// `Account` below, which is a per-client TRADING dashboard config keyed by an
 /// opaque bearer token — this `User` is the auth principal for the gated
-/// membership site and has no relation to `Account` at all.
+/// membership site. Each member gets their own `Account` auto-provisioned on
+/// first entitled login (see src/lib/memberAccount.ts) so they have their own
+/// webhook/dashboard, distinct from the owner's un-owned primary Account.
 model User {
   id                   String    @id @default(cuid())
   name                 String?
@@ -207,6 +213,7 @@ model User {
   stripeSubscriptionId String?   @unique
   /// "active" | "past_due" | "canceled" | "incomplete" | null (no subscription yet)
   subscriptionStatus   String?
+  account              Account?
   accounts             OAuthAccount[]
   sessions             AuthSession[]
   createdAt            DateTime  @default(now())
