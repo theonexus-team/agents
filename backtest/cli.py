@@ -23,11 +23,13 @@ from ingest.fetch_yahoo import fetch_yahoo_csv
 from ingest.import_csv import ingest_csv
 from strategies import STRATEGIES
 
-#: Real CME/COMEX tick specs. MGC/HG/MNQ match prisma Instrument seed data (already
-#: live-traded). MYM/M2K/MCL/SIL added 2026-09-04 for the Instrument Scout (see
-#: scout.py) — NOT onboarded to the live webhook/Prisma schema, backtest-only until
-#: real trades justify adding them there too. Specs verified against CME's own specs
-#: (tick_value = tick_size * contract multiplier checks out on all four):
+#: Real CME/COMEX tick specs. MGC/HG/MNQ/MES match prisma Instrument seed data
+#: (already live-traded, all `tradeable: true`). MYM/M2K/MCL/SIL added 2026-09-04
+#: for the Instrument Scout (see scout.py) — NOT onboarded to the live
+#: webhook/Prisma schema, backtest-only until real trades justify adding them
+#: there too. Specs verified against CME's own specs (tick_value = tick_size *
+#: contract multiplier checks out on all):
+#:   MES (Micro E-mini S&P 500): 0.25 pt tick = $1.25 ($5/point contract)
 #:   MYM (Micro Dow):        1.00 pt tick = $0.50
 #:   M2K (Micro Russell 2K): 0.10 pt tick = $0.50
 #:   MCL (Micro Crude Oil):  $0.01/bbl tick = $1.00 (100 bbl contract)
@@ -36,6 +38,7 @@ INSTRUMENTS = {
     "MGC": InstrumentSpec(symbol="MGC", tick_size=0.10, tick_value=1.00),
     "HG": InstrumentSpec(symbol="HG", tick_size=0.0005, tick_value=12.50),
     "MNQ": InstrumentSpec(symbol="MNQ", tick_size=0.25, tick_value=0.50),
+    "MES": InstrumentSpec(symbol="MES", tick_size=0.25, tick_value=1.25),
     "MYM": InstrumentSpec(symbol="MYM", tick_size=1.00, tick_value=0.50),
     "M2K": InstrumentSpec(symbol="M2K", tick_size=0.10, tick_value=0.50),
     "MCL": InstrumentSpec(symbol="MCL", tick_size=0.01, tick_value=1.00),

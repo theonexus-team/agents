@@ -5,6 +5,7 @@ from engine.strategy import Strategy
 from .algo2_first_touch import Algo2FirstTouchStrategy
 from .cisd import CisdStrategy
 from .inversion_fvg import InversionFvgStrategy
+from .ob_reversal import ObReversalStrategy
 from .optimal_trade_entry import OptimalTradeEntryStrategy
 from .orb_vwap import OrbVwapStrategy
 from .power_of_three import PowerOfThreeStrategy
@@ -20,6 +21,7 @@ STRATEGIES: dict[str, type[Strategy]] = {
     "smoke_test": SmokeTestStrategy,
     "orb_vwap": OrbVwapStrategy,
     "algo2_first_touch": Algo2FirstTouchStrategy,
+    "ob_reversal": ObReversalStrategy,
     "silver_bullet": SilverBulletStrategy,
     "turtle_soup": TurtleSoupStrategy,
     "inversion_fvg": InversionFvgStrategy,

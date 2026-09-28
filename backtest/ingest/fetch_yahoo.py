@@ -24,14 +24,15 @@ from pathlib import Path
 import pandas as pd
 
 #: Continuous front-month futures tickers — matches YAHOO_TICKER in
-#: src/lib/providers/yahoo.ts (the 3 originally onboarded instruments) plus the 4
-#: Instrument Scout candidates added 2026-09-04 (see scout.py). Micro contracts track
-#: the full-size contract's price 1:1 per point, so the full-size ticker is a
-#: faithful reference for all of these.
+#: src/lib/providers/yahoo.ts (the 4 onboarded, live-traded instruments — MGC/HG/
+#: MNQ/MES) plus the 4 Instrument Scout candidates added 2026-09-04 (see
+#: scout.py). Micro contracts track the full-size contract's price 1:1 per
+#: point, so the full-size ticker is a faithful reference for all of these.
 YAHOO_TICKER = {
     "MGC": "GC=F",
     "HG": "HG=F",
     "MNQ": "NQ=F",
+    "MES": "ES=F",
     "MYM": "YM=F",
     "M2K": "RTY=F",
     "MCL": "CL=F",

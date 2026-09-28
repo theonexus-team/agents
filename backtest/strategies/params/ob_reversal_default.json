@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "ob_struct_len": 9,
+  "ob_keep_count": 2,
+  "min_age_bars": 3,
+  "max_trades_per_session": 3,
+  "hg_target_ticks": 20,
+  "default_target_ticks": 80,
+  "hg_contracts": 1,
+  "default_contracts": 4,
+  "trail_arm_profit": 160,
+  "trail_ticks": 20
+}

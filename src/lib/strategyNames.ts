@@ -15,6 +15,7 @@ const STRATEGY_DISPLAY_NAME: Record<string, string> = {
   algo2_first_touch: "The Threshold",
   "OB Reversal": "Revenge",
   "Theonexus - OB Reversal": "Revenge",
+  ob_reversal: "Revenge",
 };
 
 export function strategyDisplayName(raw: string): string {

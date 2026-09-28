@@ -6,8 +6,8 @@ import type { BacktestMode, InstrumentSymbol } from "@/lib/types";
 //: Must match backtest/strategies/__init__.py's STRATEGIES dict — there's no shared
 //: source of truth across the two languages, so keep these two lists in sync by hand
 //: when a new strategy gets registered.
-const VALID_STRATEGIES = ["orb_vwap", "algo2_first_touch"];
-const VALID_SYMBOLS = ["MGC", "HG", "MNQ"];
+const VALID_STRATEGIES = ["orb_vwap", "algo2_first_touch", "ob_reversal"];
+const VALID_SYMBOLS = ["MGC", "HG", "MNQ", "MES"];
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

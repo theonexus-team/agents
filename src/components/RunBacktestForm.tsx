@@ -5,8 +5,8 @@ import { strategyDisplayName } from "@/lib/strategyNames";
 import { Panel } from "./Panel";
 
 //: Must match backtest/strategies/__init__.py's STRATEGIES dict.
-const STRATEGIES = ["orb_vwap", "algo2_first_touch"];
-const SYMBOLS = ["MGC", "HG", "MNQ"];
+const STRATEGIES = ["orb_vwap", "algo2_first_touch", "ob_reversal"];
+const SYMBOLS = ["MGC", "HG", "MNQ", "MES"];
 
 function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
