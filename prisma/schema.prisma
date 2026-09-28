@@ -178,10 +178,82 @@ model Account {
   maxLossBreached Boolean  @default(false)
   globalPaused    Boolean  @default(false)
   createdAt       DateTime @default(now())
+  /// Set when this account's owner clicks "pay us to install it for you" on
+  /// their /setup page — before the $100 Stripe Checkout completes.
+  installRequestedAt DateTime?
+  /// Set by the Stripe webhook once the $100 one-time install payment succeeds.
+  installPaidAt      DateTime?
 
   trades        Trade[]
   openPositions OpenPosition[]
   signals       Signal[]
+}
+
+/// Mastermind member account (Google login). Deliberately separate from
+/// `Account` above, which is a per-client TRADING dashboard config keyed by an
+/// opaque bearer token — this `User` is the auth principal for the gated
+/// membership site and has no relation to `Account` at all.
+model User {
+  id                   String    @id @default(cuid())
+  name                 String?
+  email                String?   @unique
+  emailVerified        DateTime?
+  image                String?
+  /// Grandfathered mastermind members who bypass Stripe — set once via
+  /// COMPED_MEMBER_EMAILS on first Google login (src/lib/authjs.ts), never by
+  /// the Stripe webhook.
+  comped               Boolean   @default(false)
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  /// "active" | "past_due" | "canceled" | "incomplete" | null (no subscription yet)
+  subscriptionStatus   String?
+  accounts             OAuthAccount[]
+  sessions             AuthSession[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+}
+
+/// Auth.js's OAuth-linkage model (one row per linked provider identity, e.g.
+/// Google). Named OAuthAccount, NOT Account — that name is already the
+/// per-client trading dashboard config above; reusing it would collide on
+/// `prisma.account` and mix up two unrelated concepts.
+model OAuthAccount {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+/// Auth.js's login-session model. Named AuthSession, NOT Session — `enum
+/// Session` (trading sessions: TOKYO/SHANGHAI/LONDON/NEW_YORK) already owns
+/// that identifier, and Prisma requires globally unique model/enum names.
+/// Stays empty in practice: the app uses JWT sessions (see src/lib/authjs.ts),
+/// this table only exists to satisfy the Adapter contract.
+model AuthSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 model PriceHealth {

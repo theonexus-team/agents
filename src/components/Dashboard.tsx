@@ -203,6 +203,11 @@ export function Dashboard({
             </p>
           </div>
           <div className="flex flex-none gap-2.5">
+            {data.account && accessToken && (
+              <Link href={`/a/${accessToken}/setup`} className="btn btn-secondary">
+                Setup
+              </Link>
+            )}
             <button onClick={exportLog} className="btn btn-secondary">
               Export log
             </button>
