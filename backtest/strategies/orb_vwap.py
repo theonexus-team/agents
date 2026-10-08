@@ -4,8 +4,8 @@
 detection/stops reuse engine.orderblocks (CC BY-NC-SA 4.0, see that module's header).
 
 Fidelity notes (see backtest/README.md for the general fill-model caveats):
-- Session windows use a fixed GMT+7 offset (Etc/GMT-7), matching the Pine script's
-  `tmzn` input default exactly (a static offset, not a DST-observing zone).
+- Session windows are in America/New_York (DST-observing), matching the Pine
+  script's `tmzn` input default exactly.
 - VWAP resets daily at 6pm ET (the same "real futures trading day" boundary already
   used elsewhere in this project), NOT at TradingView's own exchange-session
   calendar reset, which isn't something this engine has access to replicate exactly.
@@ -31,7 +31,7 @@ from engine.orderblocks import OrderBlockTracker
 from engine.sessions import SessionWindow, trading_day_start
 from engine.strategy import Direction, EngineContext, SessionKey, Strategy
 
-_GMT7 = "Etc/GMT-7"
+_NY = "America/New_York"
 
 
 @dataclass
@@ -46,10 +46,10 @@ class _SessionState:
 
 class OrbVwapStrategy(Strategy):
     SESSION_WINDOWS = {
-        SessionKey.TOKYO: SessionWindow("Tokyo", 7, 0, 16, 0, _GMT7),
-        SessionKey.SHANGHAI: SessionWindow("Shanghai", 8, 0, 15, 0, _GMT7),
-        SessionKey.LONDON: SessionWindow("London", 15, 0, 23, 40, _GMT7),
-        SessionKey.NEW_YORK: SessionWindow("New York", 20, 30, 4, 0, _GMT7),
+        SessionKey.TOKYO: SessionWindow("Tokyo", 20, 0, 3, 0, _NY),
+        SessionKey.SHANGHAI: SessionWindow("Shanghai", 21, 30, 3, 0, _NY),
+        SessionKey.LONDON: SessionWindow("London", 3, 0, 8, 0, _NY),
+        SessionKey.NEW_YORK: SessionWindow("New York", 9, 30, 15, 0, _NY),
     }
 
     def __init__(self, params: dict, instrument):

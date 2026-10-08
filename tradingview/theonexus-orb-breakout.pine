@@ -78,7 +78,9 @@ strategy("Theonexus - ORB Breakout", overlay = true, default_qty_type = strategy
      initial_capital = 50000, currency = currency.USD)
 
 ref_res = ""
-tmzn = input(defval="GMT+7", title = "Timezone")
+// IANA zone, not a fixed offset: follows EST/EDT so 09:30 is always the NY cash
+// open (UTC-4 in summer, UTC-5 in winter).
+tmzn = input(defval="America/New_York", title = "Timezone")
 
 // ── Webhook config ──────────────────────────────────────────────────────────
 webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", title = "TradingView Webhook Secret", group = "Webhook")
@@ -119,10 +121,10 @@ bool showShanghai = input.bool(true, "Show Shanghai Opening Range?", group = "Op
 bool showLondon   = input.bool(true, "Show London Opening Range?", group = "Opening Ranges ON/OFF")
 bool showNewYork  = input.bool(true, "Show New York Opening Range?", group = "Opening Ranges ON/OFF")
 
-tokyo    = input.session(defval = "0700-1600", title = "Tokyo Session", group = "Session Times")
-shanghai = input.session(defval = "0800-1500", title = "Shanghai Session", group = "Session Times")
-london   = input.session(defval = "1500-2340", title = "London Session", group = "Session Times")
-newyork  = input.session(defval = "2030-0400", title = "New York Session", group = "Session Times")
+tokyo    = input.session(defval = "2000-0300", title = "Tokyo Session", group = "Session Times")
+shanghai = input.session(defval = "2130-0300", title = "Shanghai Session", group = "Session Times")
+london   = input.session(defval = "0300-0800", title = "London Session", group = "Session Times")
+newyork  = input.session(defval = "0930-1500", title = "New York Session", group = "Session Times")
 
 // ── VWAP directional gate ────────────────────────────────────────────────────
 // Replaces the old EMA trend filter: price above VWAP -> only longs eligible,
