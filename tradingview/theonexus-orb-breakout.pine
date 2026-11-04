@@ -1,608 +1,522 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
-// © hundredtoamillion (original opening-range indicator) — extended with Shanghai
-// session, webhook alert firing, and order-block-based stops for Theonexus Trading
-// Oracle. The order-block detection is a simplified port of "Price Action Toolkit
-// Lite [UAlgo]" (© UAlgo), licensed CC BY-NC-SA 4.0:
-// https://creativecommons.org/licenses/by-nc-sa/4.0/ — noncommercial use only, and if
-// you ever share/publish this script it must carry that same license + credit.
+// © hundredtoamillion (original opening-range indicator), extended for Theonexus Trading Oracle.
+// The order-block detection is a simplified rewrite inspired by "Price Action Toolkit Lite [UAlgo]"
+// (© UAlgo), licensed CC BY-NC-SA 4.0: https://creativecommons.org/licenses/by-nc-sa/4.0/ —
+// noncommercial use only; if you ever share/publish this script it must carry that license + credit.
 //
-// This is 1 of 2 companion scripts for Theonexus Trading Oracle:
-//   - Theonexus - ORB Breakout   (this file) — session opening-range breakout
-//   - Theonexus - OB Reversal    (separate file) — order-block rejection reversal
-// (Two further standalone scripts, ORB 3-Candle Confirmation and Algo 2 First-Touch
-// Zones, were built separately and are now merged into/superseded by this file's
-// entry logic below — kept as reference, not required alongside this one.)
+// !! KEEP THIS SCRIPT PRIVATE — NEVER PUBLISH IT !! Once the webhook secret / PickMyTrade token
+// inputs are filled in, they travel in plain text inside every alert message.
 //
-// !! KEEP THIS SCRIPT PRIVATE — NEVER PUBLISH IT !!
-// Once you fill in the webhook secret and/or PickMyTrade credentials below, this
-// script contains those in plain text inside every alert message.
+// ─── WHAT THIS DOES ──────────────────────────────────────────────────────────────────────────────
+// Opening-range breakout on Tokyo / Shanghai / London / New York.
+//   1. Opening range (OR) = high/low of the first `orMinutes` of each session (sessions use real
+//      exchange time zones, so DST is handled automatically).
+//   2. After the OR completes, inside the entry window:
+//        CONTINUATION — `confirmBars` consecutive closes outside the OR on the same side → enter
+//                       in that direction on the last of those closes.
+//        REVERSAL     — a close back inside the OR after a close outside → failed breakout, enter
+//                       the opposite way on that close.
+//   3. Filters: VWAP side (an order-block bounce may override it), skip if the close sits inside an
+//      order block, key-level "room to run", daily loss / trade-count limits, one position at a time.
+//   4. Risk: ATR-based stop; contracts = min(Contracts, what fits in Max risk $ and the remaining daily
+//      loss budget). Target = nearest key level in the trade's direction (skip the trade if that level
+//      is closer than Min room R), capped at Max target R.
+//   5. Management: break-even at +beAtR, ATR trail after +trailStartR, time exit after forceFlatMinutes.
+//      Stops/targets are REAL strategy.exit() orders, so the Strategy Tester, the dashboard and the
+//      broker all see the same prices.
 //
-// MERGED: the entry trigger is now the 3-candle confirmation sequence (candle 1 =
-// breakout close outside the ORB; candle 2 = one-time continuation check; if not
-// continuing, every candle from there on is checked for a close back inside the
-// ORB, indefinitely, until the entry cutoff) instead of firing instantly on the
-// first close outside the range. VWAP is now a hard directional gate (price above
-// VWAP -> only longs eligible, below -> only shorts), replacing the EMA trend
-// filter that used to do that job — the order-block bounce override still works
-// exactly as before, just overriding VWAP now instead of the EMA read. Session
-// re-entry is gone: hard one-trade-per-session cap, matching the 3-candle spec.
-// Stops stay order-block-based and the target stays a fixed tick count — this
-// script's existing strengths, kept rather than replaced with the simpler
-// opposite-side-of-ORB stop / R:R target the 3-candle version used standalone.
+// ─── ALERT SETUP (two alerts on this script) ─────────────────────────────────────────────────────
+//   A) Dashboard: condition = this strategy, "alert() function calls only" → dashboard webhook URL.
+//   B) PickMyTrade (optional): condition = this strategy, "Order fills only" → PickMyTrade webhook URL.
+//      Entries carry a bracket (sl/tp absolute prices) so the BROKER always holds a protective stop.
+//      Verify the field names against PickMyTrade's alert builder for your account before going live.
 //
-// STRATEGY: 1-min opening-range breakout across Tokyo/Shanghai/London/New York
-// sessions. Opening range = the first real 1-minute candle of each session,
-// locked via request.security regardless of chart timeframe. On a close outside
-// the range (candle 1), candle 2 checks once whether price is still closing
-// outside in the same direction — if so, continuation is confirmed and the entry
-// fires on candle 3. If not, every candle from then on (no fixed cutoff at candle
-// 3) is checked for a close back inside the range; the first one that happens is
-// a failed-breakout reversal, and the entry fires on that same candle, opposite
-// direction, if VWAP allows it. Only one trade fires per session — once taken,
-// nothing else can start until the next session, and no new breakout can even
-// start arming past the configurable entry-cutoff time. Any position still open
-// past the configurable forced-flat time is closed regardless of where its stop/
-// target sit.
+// ─── BACKTEST REALISM ────────────────────────────────────────────────────────────────────────────
+// Commission/slippage defaults below are estimates for micros — set your real costs in the strategy's
+// Properties tab. Bar magnifier is on (needs a TradingView plan that supports it).
 //
-// Both the instrument symbol AND tick size sent to the webhook are read automatically
-// from the chart (syminfo.root / syminfo.mintick) — there are no manual per-instrument
-// fields to forget to update.
-//
-// Sizes contracts the same way OB Reversal does (8 for MGC/MNQ, 1 for HG, picked
-// automatically from the chart's instrument) and sends that in the entry alert, so the
-// dashboard computes real ticks * tick value * contracts P&L. This is also what the
-// trailing stop arms off of: once floating profit passes $160 (configurable), the stop
-// starts trailing behind price by a fixed tick distance (also configurable) instead of
-// sitting at the original stop. The target itself is untouched.
-//
-// One open position per instrument at a time, enforced by the dashboard's webhook —
-// this script and the OB Reversal script can't both hold a position on the same
-// instrument simultaneously; a second entry attempt while one is already open is
-// rejected server-side rather than opening a conflicting long+short.
-//
-// A breakout entry is also skipped entirely if the close is currently sitting inside
-// a still-valid order block or sell block (as opposed to wicking in and rejecting
-// back out — that's the bounce override, a different thing). Checked at the moment
-// of entry firing (candle 3, or the reversal-confirmation candle), not at the
-// original breakout candle. Toggleable under "Order Blocks".
-//
-// The `contracts` value sent to the DASHBOARD webhook (orbContracts, fixed at 8 or 1)
-// is only a BASELINE — the dashboard's own webhook overrides it for MGC/MNQ with a
-// live risk-scaled count. The PickMyTrade relay below uses this same baseline count
-// directly (real execution doesn't get the dashboard's post-hoc scaling).
+// Run on a 1-minute chart (or any intraday timeframe not longer than the OR length).
 
 //@version=5
+strategy("Theonexus - ORB Breakout", overlay = true, pyramiding = 0,
+     default_qty_type = strategy.fixed, default_qty_value = 1,
+     initial_capital = 50000, currency = currency.USD,
+     commission_type = strategy.commission.cash_per_contract, commission_value = 0.75, slippage = 1,
+     process_orders_on_close = true, calc_on_every_tick = false, use_bar_magnifier = true,
+     max_bars_back = 1000, max_boxes_count = 50)
 
-strategy("Theonexus - ORB Breakout", overlay = true, default_qty_type = strategy.fixed,
-     default_qty_value = 1, calc_on_every_tick = false, process_orders_on_close = true,
-     initial_capital = 50000, currency = currency.USD)
+// ═════════════════════════════════════ INPUTS ═════════════════════════════════════════════════════
+string G_SESS = "Sessions (local exchange time — DST handled)"
+tradeTokyo    = input.bool(true, "Trade Tokyo",    inline = "tk", group = G_SESS)
+tokyoSess     = input.session("0900-1530", "",     inline = "tk", group = G_SESS)
+tokyoTz       = input.string("Asia/Tokyo", "",     inline = "tk", group = G_SESS)
+tradeShanghai = input.bool(true, "Trade Shanghai", inline = "sh", group = G_SESS)
+shanghaiSess  = input.session("0900-1500", "",     inline = "sh", group = G_SESS)
+shanghaiTz    = input.string("Asia/Shanghai", "",  inline = "sh", group = G_SESS)
+tradeLondon   = input.bool(true, "Trade London",   inline = "ld", group = G_SESS)
+londonSess    = input.session("0800-1630", "",     inline = "ld", group = G_SESS)
+londonTz      = input.string("Europe/London", "",  inline = "ld", group = G_SESS)
+tradeNewYork  = input.bool(true, "Trade New York", inline = "ny", group = G_SESS)
+newyorkSess   = input.session("0930-1600", "",     inline = "ny", group = G_SESS)
+newyorkTz     = input.string("America/New_York", "", inline = "ny", group = G_SESS)
+showOR        = input.bool(true, "Show opening ranges", group = G_SESS)
 
-ref_res = ""
-tmzn = input(defval="GMT+7", title = "Timezone")
+string G_ENTRY = "Entry"
+orMinutes         = input.int(5, "Opening range length (minutes)", minval = 1, group = G_ENTRY)
+entryWindowMin    = input.int(30, "Entry window (minutes after the OR completes)", minval = 1, group = G_ENTRY)
+confirmBars       = input.int(2, "Continuation: consecutive closes outside the OR", minval = 1, maxval = 5, group = G_ENTRY)
+allowContinuation = input.bool(true, "Take continuation entries", group = G_ENTRY)
+allowReversal     = input.bool(true, "Take failed-breakout reversal entries", group = G_ENTRY)
+vwapFilter        = input.bool(true, "VWAP filter (longs above / shorts below)", group = G_ENTRY)
 
-// ── Webhook config ──────────────────────────────────────────────────────────
-webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", title = "TradingView Webhook Secret", group = "Webhook")
-// Read directly from the chart instead of manual inputs — see header note above.
-symbolChoice  = syminfo.root
-tickSize      = syminfo.mintick
-targetTicks   = input.int(10, title = "First-entry target (ticks)", minval = 1, group = "Webhook")
-breakoutWindowMinutes = input.int(15, title = "Entry cutoff (minutes after session open — no NEW breakout can start arming past this)", minval = 1, group = "Webhook")
-forceFlatMinutes = input.int(120, title = "Forced flat (minutes after session open — any open position closes here regardless of stop/target)", minval = 1, group = "Webhook")
+string G_RISK = "Risk & exits"
+contractsInput  = input.int(8, "Contracts (maximum)", minval = 1, group = G_RISK)
+maxRiskUsd      = input.float(300, "Max risk per trade ($) — contracts are reduced to fit", minval = 1, group = G_RISK)
+atrLen          = input.int(14, "ATR length", minval = 1, group = G_RISK)
+stopAtrMult     = input.float(2.0, "Stop distance (× ATR)", minval = 0.1, step = 0.1, group = G_RISK)
+minStopTicks    = input.int(10, "Minimum stop (ticks)", minval = 1, group = G_RISK)
+maxRR           = input.float(3.0, "Max target (R) — also the target when no key level applies", minval = 0.5, step = 0.25, group = G_RISK)
+useBreakeven    = input.bool(true, "Move stop to break-even", inline = "be", group = G_RISK)
+beAtR           = input.float(1.0, "at +R", minval = 0.1, step = 0.1, inline = "be", group = G_RISK)
+beOffsetTicks   = input.int(1, "offset ticks", minval = 0, inline = "be", group = G_RISK)
+useTrail        = input.bool(true, "ATR trailing stop", inline = "tr", group = G_RISK)
+trailStartR     = input.float(1.5, "starts at +R", minval = 0.1, step = 0.1, inline = "tr", group = G_RISK)
+trailAtrMult    = input.float(1.5, "× ATR", minval = 0.1, step = 0.1, inline = "tr", group = G_RISK)
+forceFlatMinutes = input.int(120, "Time exit (minutes after entry)", minval = 1, group = G_RISK)
 
-// Real dollar-per-tick value and contract sizing, same convention as the OB Reversal
-// script — needed so the trailing stop below can arm off an actual dollar profit
-// figure instead of raw ticks. Also sent in the entry alert now so the dashboard
-// computes this strategy's P&L from real ticks * tick value * contracts too, instead
-// of the old normalized risk-per-trade estimate.
-tickDollarValue = symbolChoice == "HG" ? 12.50 : symbolChoice == "MNQ" ? 0.50 : 1.00
-// Bumped 4 -> 8 (2026-09-04) per the user's own actual practice ("6 to 8 contracts
-// because these are scalp moves") — HG stays at 1, unchanged.
-orbContracts    = symbolChoice == "HG" ? 1 : 8
+string G_DAY = "Daily limits (prop-firm guard rails, 0 = off)"
+dailyLossUsd   = input.float(600, "Daily loss limit ($) — also caps the size of the next trade", minval = 0, group = G_DAY)
+dailyProfitUsd = input.float(0, "Stop for the day once realized profit reaches ($)", minval = 0, group = G_DAY)
+maxTradesDay   = input.int(4, "Max trades per day", minval = 0, group = G_DAY)
 
-// ── PickMyTrade relay (optional, off by default) ──────────────────────────────
-// When enabled, every strategy.entry()/strategy.close() call below also carries a
-// PickMyTrade-shaped alert_message built from REAL computed values (symbol, side,
-// contracts) — not TradingView's {{placeholder}} syntax. Create ONE TradingView
-// alert on this script with condition "Order fills" pointed at PickMyTrade's
-// webhook URL, and every fill sends the correct JSON automatically.
-// This does NOT touch the dashboard alert() calls below, which are unchanged.
-pmtEnabled   = input.bool(false, "Relay real fills to PickMyTrade", group = "PickMyTrade")
-pmtToken     = input.string("", "PickMyTrade Token", group = "PickMyTrade")
-pmtAccountId = input.string("", "PickMyTrade Account ID", group = "PickMyTrade")
-pmtSymbol = symbolChoice == "MGC" ? "MGC1!" : symbolChoice == "HG" ? "HG1!" : "MNQ1!"
+string G_LVL = "Key levels (targets + room-to-run filter)"
+useKeyLevels      = input.bool(true, "Use key levels for targets", group = G_LVL)
+minRoomR          = input.float(1.0, "Min room to the nearest level (R) — closer = skip trade", minval = 0, step = 0.1, group = G_LVL)
+targetBufferTicks = input.int(2, "Exit this many ticks in front of the level", minval = 0, group = G_LVL)
+lvlPrevDay        = input.bool(true, "Previous day high / low / close", group = G_LVL)
+lvlPrevWeek       = input.bool(true, "Previous week high / low", group = G_LVL)
+lvlSessions       = input.bool(true, "Last completed session highs / lows", group = G_LVL)
+lvlOR             = input.bool(true, "Active opening-range edges", group = G_LVL)
+lvlRound          = input.bool(true, "Round numbers", group = G_LVL)
+roundStepIn       = input.float(0, "Round-number step (0 = auto per instrument)", minval = 0, group = G_LVL)
+showLevels        = input.bool(true, "Plot key levels", group = G_LVL)
 
-f_pmtMessage(side, qty) =>
-    pmtEnabled ? '{"symbol":"' + pmtSymbol + '","data":"' + side + '","quantity":' + str.tostring(qty) + ',"token":"' + pmtToken + '","account_id":"' + pmtAccountId + '","order_type":"MKT"}' : ""
+string G_OB = "Order blocks"
+obEnabled       = input.bool(true, "Use order blocks (inside-block skip + VWAP bounce override)", group = G_OB)
+obShowBoxes     = input.bool(true, "Draw order blocks", group = G_OB)
+obLen           = input.int(9, "Structure length", minval = 2, group = G_OB)
+blockInsideOb   = input.bool(true, "Skip entry if the close is inside an order block", group = G_OB)
+obOverrideBars  = input.int(3, "Bounce override window (bars)", minval = 0, group = G_OB)
 
-bool showTokyo    = input.bool(true, "Show Tokyo Opening Range?", group = "Opening Ranges ON/OFF")
-bool showShanghai = input.bool(true, "Show Shanghai Opening Range?", group = "Opening Ranges ON/OFF")
-bool showLondon   = input.bool(true, "Show London Opening Range?", group = "Opening Ranges ON/OFF")
-bool showNewYork  = input.bool(true, "Show New York Opening Range?", group = "Opening Ranges ON/OFF")
+string G_HOOK = "Dashboard webhook"
+webhookSecret = input.string("REPLACE_WITH_YOUR_WEBHOOK_SECRET", "Webhook secret", group = G_HOOK)
+strategyName  = input.string("1m ORB + VWAP", "Strategy name sent to the dashboard (must match its allowlist)", group = G_HOOK)
 
-tokyo    = input.session(defval = "0700-1600", title = "Tokyo Session", group = "Session Times")
-shanghai = input.session(defval = "0800-1500", title = "Shanghai Session", group = "Session Times")
-london   = input.session(defval = "1500-2340", title = "London Session", group = "Session Times")
-newyork  = input.session(defval = "2030-0400", title = "New York Session", group = "Session Times")
+string G_PMT = "PickMyTrade"
+pmtEnabled   = input.bool(false, "Relay fills to PickMyTrade", group = G_PMT)
+pmtBracket   = input.bool(true, "Send stop/target bracket with the entry", group = G_PMT)
+pmtToken     = input.string("", "Token", group = G_PMT)
+pmtAccountId = input.string("", "Account ID", group = G_PMT)
+pmtAllowed   = input.string("MGC,MNQ,MES,HG,MCL", "Instruments allowed to execute (chart root symbols)", group = G_PMT)
 
-// ── VWAP directional gate ────────────────────────────────────────────────────
-// Replaces the old EMA trend filter: price above VWAP -> only longs eligible,
-// below -> only shorts eligible. The order-block bounce override further down is
-// the one thing allowed to override this.
-vwapFilterEnabled = input.bool(true, "VWAP Filter ON/OFF", group = "VWAP")
-vwapVal = ta.vwap(hlc3)
-plot(vwapVal, color = color.new(color.aqua, 0), title = "VWAP")
-bool vwapBiasLong  = not vwapFilterEnabled or close > vwapVal
-bool vwapBiasShort = not vwapFilterEnabled or close < vwapVal
-trendOverrideWindowBars = input.int(3, "Order block bounce override window (bars)", minval = 0, group = "VWAP")
+showInfo = input.bool(true, "Show info panel")
 
-// ── Trailing stop ─────────────────────────────────────────────────────────────
-// Once a trade's floating profit passes this dollar amount, its stop starts
-// trailing behind price by a fixed tick distance instead of sitting at the
-// original fixed stop. Only ever tightens. The target itself is untouched.
-trailArmProfit = input.float(160, "Arm trailing stop once profit exceeds ($)", group = "Trailing Stop")
-trailTicks     = input.int(20, "Trail distance (ticks)", minval = 1, group = "Trailing Stop")
+// ═════════════════════════════════════ INSTRUMENT ═════════════════════════════════════════════════
+// Dollar value of one tick, straight from the contract spec — no hand-maintained table.
+float tickValue = syminfo.pointvalue * syminfo.mintick
+string pmtSymbol = syminfo.root + "1!"
 
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+if barstate.isfirst
+    if not timeframe.isintraday or timeframe.in_seconds() > orMinutes * 60
+        runtime.error("Use an intraday chart whose timeframe is not longer than the opening range (" + str.tostring(orMinutes) + " min).")
+    if pmtEnabled and not str.contains("," + pmtAllowed + ",", "," + syminfo.root + ",")
+        runtime.error("PickMyTrade relay is on but " + syminfo.root + " is not in the allowed instrument list.")
 
-// TK/SH/LD/NY are used only to plot session-active state on the CURRENT chart
-// timeframe; the actual opening range below is computed independently from real
-// 1-minute data so it stays correct no matter what timeframe you're viewing.
-TK = time(ref_res, tokyo, tmzn)
-SH = time(ref_res, shanghai, tmzn)
-LD = time(ref_res, london, tmzn)
-NY = time(ref_res, newyork, tmzn)
+f_autoStep() =>
+    string r = syminfo.root
+    r == "MGC" or r == "GC" ? 10.0 : r == "MNQ" or r == "NQ" ? 50.0 : r == "MES" or r == "ES" ? 10.0 :
+      r == "MCL" or r == "CL" ? 0.5 : r == "HG" or r == "MHG" ? 0.05 : syminfo.mintick * 100
+float roundStep = roundStepIn > 0 ? roundStepIn : f_autoStep()
 
-bool tkActive = not na(TK)
-bool shActive = not na(SH)
-bool ldActive = not na(LD)
-bool nyActive = not na(NY)
+// ═════════════════════════════════════ OPENING RANGES ═════════════════════════════════════════════
+// Returns the OR, session state, and the high/low of the last COMPLETED session (used as key levels).
+f_or(string sess, string tz) =>
+    t = time(timeframe.period, sess, tz)
+    bool inSess  = not na(t)
+    bool isFirst = inSess and na(t[1])
+    var float sStart = na
+    var float orH = na
+    var float orL = na
+    var float runH = na
+    var float runL = na
+    var float lastH = na
+    var float lastL = na
+    if isFirst
+        sStart := time
+        orH := high
+        orL := low
+        runH := high
+        runL := low
+    else if inSess
+        runH := math.max(runH, high)
+        runL := math.min(runL, low)
+        if time < sStart + orMinutes * 60000
+            orH := math.max(orH, high)
+            orL := math.min(orL, low)
+    if not inSess and not na(t[1])
+        lastH := runH
+        lastL := runL
+    bool orReady = inSess and not na(sStart) and time >= sStart + orMinutes * 60000
+    [orH, orL, isFirst, inSess, orReady, sStart, lastH, lastL]
 
-open_bar(t) => na(t[1]) and not na(t) or t[1] < t ? 1 : 0
+[tkH, tkL, tkFirst, tkIn, tkReady, tkStart, tkLastH, tkLastL] = f_or(tokyoSess, tokyoTz)
+[shH, shL, shFirst, shIn, shReady, shStart, shLastH, shLastL] = f_or(shanghaiSess, shanghaiTz)
+[ldH, ldL, ldFirst, ldIn, ldReady, ldStart, ldLastH, ldLastL] = f_or(londonSess, londonTz)
+[nyH, nyL, nyFirst, nyIn, nyReady, nyStart, nyLastH, nyLastL] = f_or(newyorkSess, newyorkTz)
 
-get_ohlc(s) =>
-    // Assign persisting variables
-    var float _open  = na
-    var float _high  = na
-    var float _low   = na
-    var float _close = na
+// ═════════════════════════════════════ KEY LEVELS ═════════════════════════════════════════════════
+[pdh, pdl, pdc] = request.security(syminfo.tickerid, "D", [high[1], low[1], close[1]], lookahead = barmerge.lookahead_on)
+[pwh, pwl]      = request.security(syminfo.tickerid, "W", [high[1], low[1]], lookahead = barmerge.lookahead_on)
+float rUp = math.ceil(close / roundStep) * roundStep
+float rDn = math.floor(close / roundStep) * roundStep
 
-    // Update variables if new bar
-    _open  := s ?
-         open : nz(_open[1], open)
-    _high  := s or high > _high[1] ?
-         high : nz(_high[1], high)
-    _low   := s or low < _low[1] ?
-         low : nz(_low[1], low)
-    _close := close
+levels = array.new_float()
+if lvlPrevDay
+    array.push(levels, pdh)
+    array.push(levels, pdl)
+    array.push(levels, pdc)
+if lvlPrevWeek
+    array.push(levels, pwh)
+    array.push(levels, pwl)
+if lvlSessions
+    array.push(levels, tkLastH)
+    array.push(levels, tkLastL)
+    array.push(levels, shLastH)
+    array.push(levels, shLastL)
+    array.push(levels, ldLastH)
+    array.push(levels, ldLastL)
+    array.push(levels, nyLastH)
+    array.push(levels, nyLastL)
+if lvlOR
+    if tkIn and tkReady
+        array.push(levels, tkH)
+        array.push(levels, tkL)
+    if shIn and shReady
+        array.push(levels, shH)
+        array.push(levels, shL)
+    if ldIn and ldReady
+        array.push(levels, ldH)
+        array.push(levels, ldL)
+    if nyIn and nyReady
+        array.push(levels, nyH)
+        array.push(levels, nyL)
+if lvlRound
+    array.push(levels, rUp)
+    array.push(levels, rUp + roundStep)
+    array.push(levels, rDn)
+    array.push(levels, rDn - roundStep)
 
-    // Return variables as a tuple
-    [_open, _high, _low, _close]
+// Nearest level strictly beyond `px` in direction d (+1 above, -1 below).
+f_nearest(array<float> lv, int d, float px, float minDist) =>
+    float best = na
+    for lvl in lv
+        if not na(lvl)
+            float dist = (lvl - px) * d
+            if dist > minDist and (na(best) or dist < (best - px) * d)
+                best := lvl
+    best
 
-// ── 1-minute opening range, locked to real 1-minute data via request.security ──
-// so the range itself never depends on which timeframe you're viewing the chart at.
-f_session1mOR(sess) =>
-    tS = time(ref_res, sess, tmzn)
-    sw = ta.change(open_bar(tS)) > 0
-    [_o, h, l, _c] = get_ohlc(sw)
-    var float orHigh = na
-    var float orLow  = na
-    if sw
-        orHigh := h
-        orLow  := l
-    [orHigh, orLow, sw]
+// ═════════════════════════════════════ RISK / SIZING ══════════════════════════════════════════════
+float atr = ta.atr(atrLen)
+int stopTicks = math.max(minStopTicks, int(math.ceil(nz(atr) * stopAtrMult / syminfo.mintick)))
+float riskDist = stopTicks * syminfo.mintick
+float riskPerContract = stopTicks * tickValue
 
-[tk_open_high, tk_open_low, tk_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(tokyo))
-[sh_open_high, sh_open_low, sh_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(shanghai))
-[ld_open_high, ld_open_low, ld_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(london))
-[ny_open_high, ny_open_low, ny_switch] = request.security(syminfo.tickerid, "1", f_session1mOR(newyork))
+// Daily P&L / trade count (the "D" boundary is the exchange trading day, e.g. 18:00 ET for CME).
+var float dayStartNet = 0.0
+var int dayStartTrades = 0
+if timeframe.change("D")
+    dayStartNet := strategy.netprofit
+    dayStartTrades := strategy.closedtrades + strategy.opentrades
+float dayPnl = strategy.netprofit - dayStartNet
+int dayTrades = strategy.closedtrades + strategy.opentrades - dayStartTrades
+bool dayLocked = (dailyLossUsd > 0 and dayPnl <= -dailyLossUsd) or (dailyProfitUsd > 0 and dayPnl >= dailyProfitUsd) or (maxTradesDay > 0 and dayTrades >= maxTradesDay)
 
-plorh = plot(showLondon and ldActive ? ld_open_high : na, color = color.new(color.blue,0), style = plot.style_circles, title = "London Opening Range High")
-plorl = plot(showLondon and ldActive ? ld_open_low :na, color = color.new(color.blue,0), style = plot.style_circles, title = "London Opening Range Low")
-fill(plorh, plorl, color = color.new(color.blue,55), title = "London Opening Range Fill")
-pnorh = plot(showNewYork and nyActive ? ny_open_high : na, color = color.new(color.red, 0), style = plot.style_circles, title = "New York Opening Range High")
-pnorl = plot(showNewYork and nyActive ? ny_open_low :na, color = color.new(color.red,0) , style = plot.style_circles, title = "New York Opening Range Low")
-fill(pnorh, pnorl, color = color.new(color.red,65), title = "New York Opening Range Fill")
-ptorh = plot(showTokyo and tkActive ? tk_open_high : na, color = color.new(color.yellow, 0), style = plot.style_circles, title = "Tokyo Opening Range High")
-ptorl = plot(showTokyo and tkActive ? tk_open_low :na, color = color.new(color.yellow, 0), style = plot.style_circles,  title = "Tokyo Opening Range Low")
-fill(ptorh, ptorl, color = color.new(color.yellow,80), title = "Tokyo Opening Range Fill")
-pshh = plot(showShanghai and shActive ? sh_open_high : na, color = color.new(color.orange, 0), style = plot.style_circles, title = "Shanghai Opening Range High")
-pshl = plot(showShanghai and shActive ? sh_open_low : na, color = color.new(color.orange, 0), style = plot.style_circles, title = "Shanghai Opening Range Low")
-fill(pshh, pshl, color = color.new(color.orange,80), title = "Shanghai Opening Range Fill")
+float riskBudget = dailyLossUsd > 0 ? math.min(maxRiskUsd, dailyLossUsd + dayPnl) : maxRiskUsd
+int tradeQty = math.min(contractsInput, int(math.floor(math.max(riskBudget, 0) / riskPerContract)))
 
-// ── Order blocks (simplified port of "Price Action Toolkit Lite [UAlgo]", CC BY-NC-SA
-// 4.0 — https://creativecommons.org/licenses/by-nc-sa/4.0/, © UAlgo) ────────────────
-obShow      = input.bool(true, "Show Order Blocks", group = "Order Blocks")
-obStructLen = input.int(9, "Order Block Structure Length", group = "Order Blocks")
-obKeepCount = input.int(2, "Order Blocks to Keep Visible", minval = 1, maxval = 10, group = "Order Blocks")
-blockEntryInsideOb = input.bool(true, "Skip entry if price closed inside a still-valid order/sell block", group = "Order Blocks")
+// Target for a trade entered at this close in direction d; na = no room, skip the trade.
+f_target(array<float> lv, int d) =>
+    float maxT = close + d * riskDist * maxRR
+    float lvl  = useKeyLevels ? f_nearest(lv, d, close, 2 * syminfo.mintick) : na
+    float t    = na(lvl) ? na : lvl - d * targetBufferTicks * syminfo.mintick
+    float room = na(t) ? na : (t - close) * d
+    float res  = na(lvl) ? maxT : room < minRoomR * riskDist ? na : room > maxRR * riskDist ? maxT : t
+    na(res) ? na : math.round(res / syminfo.mintick) * syminfo.mintick
 
-type orderblock
-    float value
-    int barStart
-    int barEnd
-    box block
-    bool broken
+float longTgt  = f_target(levels, 1)
+float shortTgt = f_target(levels, -1)
 
-var array<orderblock> bullishOrderblock = array.new<orderblock>()
-var array<orderblock> bearishOrderblock = array.new<orderblock>()
-var array<int> obHighValIndex = array.new<int>()
-var array<int> obLowValIndex = array.new<int>()
-var array<float> obHighVal = array.new_float()
-var array<float> obLowVal = array.new_float()
+// ═════════════════════════════════════ ORDER BLOCKS ═══════════════════════════════════════════════
+type OB
+    float top
+    float bottom
+    box bx
 
-var bool obDrawUp = false
-var bool obDrawDown = false
+var array<OB> bullObs = array.new<OB>()
+var array<OB> bearObs = array.new<OB>()
+int OB_MAX = 10
+int OB_LOOKBACK_MAX = 500
+
+bool swingHigh = high[obLen] >= ta.highest(high, obLen)
+bool swingLow  = low[obLen] <= ta.lowest(low, obLen)
 var int obTrend = 1
+obTrend := obTrend == 1 and swingLow ? -1 : obTrend == -1 and swingHigh ? 1 : obTrend
+bool obTrendChanged = obTrend != nz(obTrend[1], obTrend)
 
-obAtr = ta.atr(14)
+var float lastSH = na
+var int lastSHBar = na
+var bool shUsed = true
+var float lastSL = na
+var int lastSLBar = na
+var bool slUsed = true
 
-obToUp = high[obStructLen] >= ta.highest(high, obStructLen)
-obToDown = low[obStructLen] <= ta.lowest(low, obStructLen)
-obTrend := obTrend == 1 and obToDown ? -1 : obTrend == -1 and obToUp ? 1 : obTrend
+if obTrendChanged and obTrend == 1
+    lastSH := high[obLen]
+    lastSHBar := bar_index - obLen
+    shUsed := false
+if obTrendChanged and obTrend == -1
+    lastSL := low[obLen]
+    lastSLBar := bar_index - obLen
+    slUsed := false
 
-if ta.change(obTrend) != 0 and obTrend == 1
-    array.push(obHighValIndex, time[obStructLen])
-    array.push(obHighVal, high[obStructLen])
-    if array.size(obLowVal) > 1
-        obDrawUp := false
+// Break of structure up → bullish OB = lowest low since the broken swing high (zone height = ATR).
+if obEnabled and not shUsed and close > lastSH
+    shUsed := true
+    int lb = math.min(bar_index - lastSHBar, OB_LOOKBACK_MAX)
+    float lo = low
+    int loOff = 0
+    for i = 0 to lb
+        if low[i] < lo
+            lo := low[i]
+            loOff := i
+    float top = lo + atr
+    box b = obShowBoxes ? box.new(bar_index - loOff, top, bar_index, lo, border_color = color.new(color.teal, 80), bgcolor = color.new(color.teal, 80)) : na
+    array.push(bullObs, OB.new(top, lo, b))
+    if array.size(bullObs) > OB_MAX
+        OB old = array.shift(bullObs)
+        if not na(old.bx)
+            box.delete(old.bx)
 
-if ta.change(obTrend) != 0 and obTrend == -1
-    array.push(obLowValIndex, time[obStructLen])
-    array.push(obLowVal, low[obStructLen])
-    if array.size(obHighVal) > 1
-        obDrawDown := false
+// Break of structure down → bearish OB = highest high since the broken swing low.
+if obEnabled and not slUsed and close < lastSL
+    slUsed := true
+    int lb = math.min(bar_index - lastSLBar, OB_LOOKBACK_MAX)
+    float hi = high
+    int hiOff = 0
+    for i = 0 to lb
+        if high[i] > hi
+            hi := high[i]
+            hiOff := i
+    float bot = hi - atr
+    box b = obShowBoxes ? box.new(bar_index - hiOff, hi, bar_index, bot, border_color = color.new(color.red, 80), bgcolor = color.new(color.red, 80)) : na
+    array.push(bearObs, OB.new(hi, bot, b))
+    if array.size(bearObs) > OB_MAX
+        OB old = array.shift(bearObs)
+        if not na(old.bx)
+            box.delete(old.bx)
 
-if array.size(obLowVal) > 1 and obDrawDown == false
-    if close < array.get(obLowVal, array.size(obLowVal) - 1)
-        obDrawDown := true
-        if obShow
-            orderblock newOb = orderblock.new()
-            float maxV = 0
-            int barT = na
-            for i = (time - array.get(obLowValIndex, array.size(obLowValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
-                if high[i] > maxV
-                    maxV := high[i]
-                    barT := time[i]
-            newOb.barStart := barT
-            newOb.barEnd := time
-            newOb.broken := false
-            newOb.value := maxV
-            newOb.block := box.new(left = newOb.barStart, top = newOb.value - obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.red, 80), border_width = 1, border_color = color.new(color.red, 80))
-            array.push(bearishOrderblock, newOb)
-            if array.size(bearishOrderblock) > 20
-                array.shift(bearishOrderblock)
+// Remove EVERY block price has closed through (not just the newest few).
+if array.size(bullObs) > 0
+    for i = array.size(bullObs) - 1 to 0
+        OB o = array.get(bullObs, i)
+        if close < o.bottom
+            if not na(o.bx)
+                box.delete(o.bx)
+            array.remove(bullObs, i)
+        else if not na(o.bx)
+            box.set_right(o.bx, bar_index)
+if array.size(bearObs) > 0
+    for i = array.size(bearObs) - 1 to 0
+        OB o = array.get(bearObs, i)
+        if close > o.top
+            if not na(o.bx)
+                box.delete(o.bx)
+            array.remove(bearObs, i)
+        else if not na(o.bx)
+            box.set_right(o.bx, bar_index)
 
-if array.size(obHighVal) > 1 and obDrawUp == false
-    if close > array.get(obHighVal, array.size(obHighVal) - 1)
-        obDrawUp := true
-        if obShow
-            orderblock newOb = orderblock.new()
-            float minV = 999999999
-            int barT = na
-            for i = (time - array.get(obHighValIndex, array.size(obHighValIndex) - 1) - (time - time[1])) / (time - time[1]) to 0 by 1
-                if low[i] < minV
-                    minV := low[i]
-                    barT := time[i]
-            newOb.barStart := barT
-            newOb.barEnd := time
-            newOb.broken := false
-            newOb.value := minV
-            newOb.block := box.new(left = newOb.barStart, top = newOb.value + obAtr, right = newOb.barEnd, bottom = newOb.value, xloc = xloc.bar_time, bgcolor = color.new(color.teal, 80), border_width = 1, border_color = color.new(color.teal, 80))
-            array.push(bullishOrderblock, newOb)
-            if array.size(bullishOrderblock) > 20
-                array.shift(bullishOrderblock)
-
-// Invalidate/remove order blocks once price closes back through them
-if array.size(bullishOrderblock) > 0
-    orderblock testOb = na
-    int obCounter = 0
-    for i = array.size(bullishOrderblock) - 1 to 0 by 1
-        testOb := array.get(bullishOrderblock, i)
-        if obCounter < obKeepCount
-            testOb.block.set_right(time)
-            if close < testOb.value
-                testOb.block.delete()
-                array.remove(bullishOrderblock, i)
-            obCounter := obCounter + 1
-        else
-            testOb.block.set_right(testOb.barStart)
-
-if array.size(bearishOrderblock) > 0
-    orderblock testOb2 = na
-    int obCounter2 = 0
-    for i = array.size(bearishOrderblock) - 1 to 0 by 1
-        testOb2 := array.get(bearishOrderblock, i)
-        if obCounter2 < obKeepCount
-            testOb2.block.set_right(time)
-            if close > testOb2.value
-                testOb2.block.delete()
-                array.remove(bearishOrderblock, i)
-            obCounter2 := obCounter2 + 1
-        else
-            testOb2.block.set_right(testOb2.barStart)
-
-// Nearest still-valid order block below/above a price, for stop placement
-f_nearestBullishOB(px) =>
-    float nearest = na
-    if array.size(bullishOrderblock) > 0
-        for i = array.size(bullishOrderblock) - 1 to 0 by 1
-            ob = array.get(bullishOrderblock, i)
-            if ob.value < px and (na(nearest) or ob.value > nearest)
-                nearest := ob.value
-    nearest
-
-f_nearestBearishOB(px) =>
-    float nearest = na
-    if array.size(bearishOrderblock) > 0
-        for i = array.size(bearishOrderblock) - 1 to 0 by 1
-            ob = array.get(bearishOrderblock, i)
-            if ob.value > px and (na(nearest) or ob.value < nearest)
-                nearest := ob.value
-    nearest
-
-// ── Skip entry if price closed inside a block (checked at the moment of firing) ──
-f_closedInsideBullOb() =>
-    bool inside = false
-    if array.size(bullishOrderblock) > 0
-        for i = array.size(bullishOrderblock) - 1 to 0 by 1
-            ob = array.get(bullishOrderblock, i)
-            if not ob.broken and close <= (ob.value + obAtr) and close >= ob.value
-                inside := true
-    inside
-
-f_closedInsideBearOb() =>
-    bool inside = false
-    if array.size(bearishOrderblock) > 0
-        for i = array.size(bearishOrderblock) - 1 to 0 by 1
-            ob = array.get(bearishOrderblock, i)
-            if not ob.broken and close <= ob.value and close >= (ob.value - obAtr)
-                inside := true
-    inside
-
-bool closedInsideOb = blockEntryInsideOb and (f_closedInsideBullOb() or f_closedInsideBearOb())
-
-// ── Order block bounce: the one exception to the VWAP gate ──────────────────
-// A bounce = a rejection candle: a bar wicks into a still-valid block and CLOSES
-// back outside it, same definition the OB Reversal strategy uses. When that just
-// happened (within the override window below), an entry in that direction is
-// allowed to fire even against the VWAP bias above.
-f_touchedBullishOB() =>
-    orderblock matched = na
-    if array.size(bullishOrderblock) > 0
-        for i = array.size(bullishOrderblock) - 1 to 0 by 1
-            ob = array.get(bullishOrderblock, i)
-            float obTop = ob.value + obAtr
-            float obBottom = ob.value
-            if na(matched) and not ob.broken and low <= obTop and high >= obBottom
-                matched := ob
-    matched
-
-f_touchedBearishOB() =>
-    orderblock matched = na
-    if array.size(bearishOrderblock) > 0
-        for i = array.size(bearishOrderblock) - 1 to 0 by 1
-            ob = array.get(bearishOrderblock, i)
-            float obTop = ob.value
-            float obBottom = ob.value - obAtr
-            if na(matched) and not ob.broken and low <= obTop and high >= obBottom
-                matched := ob
-    matched
-
-touchedBullOb = f_touchedBullishOB()
-touchedBearOb = f_touchedBearishOB()
-// Nested `if`, not `and` — Pine evaluates both sides of `and` regardless of the
-// first, so a na-guard followed by `.value` access in the same `and` still crashes.
 bool bullBounceNow = false
 bool bearBounceNow = false
-if not na(touchedBullOb)
-    bullBounceNow := close > (touchedBullOb.value + obAtr)
-if not na(touchedBearOb)
-    bearBounceNow := close < (touchedBearOb.value - obAtr)
+bool insideAnyOb = false
+for o in bullObs
+    if low <= o.top and high >= o.bottom and close > o.top
+        bullBounceNow := true
+    if close >= o.bottom and close <= o.top
+        insideAnyOb := true
+for o in bearObs
+    if low <= o.top and high >= o.bottom and close < o.bottom
+        bearBounceNow := true
+    if close >= o.bottom and close <= o.top
+        insideAnyOb := true
 
-var int barsSinceBullBounce = 999999
-var int barsSinceBearBounce = 999999
-barsSinceBullBounce := bullBounceNow ? 0 : barsSinceBullBounce + 1
-barsSinceBearBounce := bearBounceNow ? 0 : barsSinceBearBounce + 1
+bool bullBounceRecent = obEnabled and nz(ta.barssince(bullBounceNow), 999999) <= obOverrideBars
+bool bearBounceRecent = obEnabled and nz(ta.barssince(bearBounceNow), 999999) <= obOverrideBars
 
-bool bullBounceRecent = barsSinceBullBounce <= trendOverrideWindowBars
-bool bearBounceRecent = barsSinceBearBounce <= trendOverrideWindowBars
+// ═════════════════════════════════════ FILTERS ════════════════════════════════════════════════════
+float vwapVal = ta.vwap(hlc3)
+bool vwapOkLong  = not vwapFilter or close > vwapVal or bullBounceRecent
+bool vwapOkShort = not vwapFilter or close < vwapVal or bearBounceRecent
 
-bool vwapOkLong  = vwapBiasLong or bullBounceRecent
-bool vwapOkShort = vwapBiasShort or bearBounceRecent
+bool baseOk  = strategy.position_size == 0 and not dayLocked and tradeQty >= 1 and not (obEnabled and blockInsideOb and insideAnyOb)
+bool longOk  = baseOk and vwapOkLong and not na(longTgt)
+bool shortOk = baseOk and vwapOkShort and not na(shortTgt)
 
-// ── 3-candle confirmation breakout, per session ──────────────────────────────
-// Candle 1 = a close outside the ORB. Candle 2 = the ONE continuation check: did
-// price also close outside in the same direction? If so, continuation is
-// confirmed and the entry fires on candle 3. If not, every candle from then on is
-// checked for a close back inside the ORB (no fixed cutoff) — the first one that
-// happens is a failed-breakout reversal, entering opposite direction on that same
-// candle if VWAP (or a fresh order-block bounce) allows it. One trade max per
-// session; each session uses its own strategy.entry()/close() order id so the
-// four sessions can never collide with each other.
-f_manageBreakout(newSession, orHigh, orLow, sessionLabel, sym, tickSz, targetTk, secret, enabled, entryCutoffMin, flatMin, contracts, tickDollar, trailArmUsd, trailTk, blockIfInsideOb) =>
-    var bool tradeTaken = false
-    var int breakoutDir = 0
-    var int barsSinceBreakout = na
-    var bool continuationConfirmed = false
-    var bool inLong = false
-    var bool inShort = false
-    var float stopPx = na
-    var float targetPx = na
-    var float entryPx = na
-    var bool trailArmed = false
-    var float sessionOpenTime = na
-
-    if newSession
-        tradeTaken := false
-        breakoutDir := 0
-        barsSinceBreakout := na
-        continuationConfirmed := false
-        trailArmed := false
-        sessionOpenTime := time
-        // NOT resetting inLong/inShort/stopPx/targetPx — an open position from the
-        // tail end of the prior session window is still managed by its own
-        // stop/target/force-flat, not silently abandoned.
-
-    int minutesSinceOpen = na(sessionOpenTime) ? na : int((time - sessionOpenTime) / 60000)
-    bool pastEntryCutoff = not na(minutesSinceOpen) and minutesSinceOpen >= entryCutoffMin
-    bool pastFlatTime = not na(minutesSinceOpen) and minutesSinceOpen >= flatMin
-
-    // ── Force-flat ──────────────────────────────────────────────────────────
-    if pastFlatTime and inLong
-        strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
-        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
-        inLong := false
-    if pastFlatTime and inShort
-        strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
-        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(close, format.mintick) + ',"outcome":"CLOSED_AT_DAY_END"}', alert.freq_once_per_bar_close)
-        inShort := false
-
-    // ── Trailing stop ────────────────────────────────────────────────────────
-    if inLong
-        float floatingProfit = ((high - entryPx) / tickSz) * tickDollar * contracts
-        if not trailArmed and floatingProfit >= trailArmUsd
-            trailArmed := true
-        if trailArmed
-            stopPx := math.max(stopPx, high - trailTk * tickSz)
-    if inShort
-        float floatingProfit = ((entryPx - low) / tickSz) * tickDollar * contracts
-        if not trailArmed and floatingProfit >= trailArmUsd
-            trailArmed := true
-        if trailArmed
-            stopPx := math.min(stopPx, low + trailTk * tickSz)
-
-    // ── Normal target/stop exit ──────────────────────────────────────────────
-    if inLong and (high >= targetPx or low <= stopPx)
-        float exitPx = high >= targetPx ? targetPx : stopPx
-        strategy.close(sessionLabel + "_Long", alert_message = f_pmtMessage("close", contracts))
-        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
-        inLong := false
-    if inShort and (low <= targetPx or high >= stopPx)
-        float exitPx = low <= targetPx ? targetPx : stopPx
-        strategy.close(sessionLabel + "_Short", alert_message = f_pmtMessage("close", contracts))
-        alert('{"secret":"' + secret + '","action":"exit","symbol":"' + sym + '","exitPrice":' + str.tostring(exitPx, format.mintick) + '}', alert.freq_once_per_bar_close)
-        inShort := false
-
-    // ── Breakout tracking / entry logic ──────────────────────────────────────
-    bool longBreak = false
-    bool shortBreak = false
-    if not tradeTaken and enabled and not pastEntryCutoff and not na(orHigh) and not na(orLow)
-        bool closedAboveOrb = close > orHigh
-        bool closedBelowOrb = close < orLow
-        bool closedInsideOrb = close <= orHigh and close >= orLow
-
-        if continuationConfirmed
-            // Candle 3 for a confirmed continuation.
-            bool vwapOk = breakoutDir == 1 ? vwapOkLong : vwapOkShort
-            if vwapOk and not blockIfInsideOb
-                float entryPxC = close
-                float obStop = breakoutDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                float stop = breakoutDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
-                float target = breakoutDir == 1 ? entryPxC + tickSz * targetTk : entryPxC - tickSz * targetTk
-                if breakoutDir == 1
-                    longBreak := true
-                    inLong := true
-                    entryPx := entryPxC
-                    stopPx := stop
-                    targetPx := target
-                    strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
-                    alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxC, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                else
-                    shortBreak := true
-                    inShort := true
-                    entryPx := entryPxC
-                    stopPx := stop
-                    targetPx := target
-                    strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
-                    alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxC, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                tradeTaken := true
-            breakoutDir := 0
-            barsSinceBreakout := na
-            continuationConfirmed := false
-
-        else if not na(barsSinceBreakout)
-            if barsSinceBreakout == 0
-                // Candle 2 — the one and only continuation check for this breakout.
-                bool stillOutside = breakoutDir == 1 ? closedAboveOrb : closedBelowOrb
-                if stillOutside
-                    continuationConfirmed := true
-                    barsSinceBreakout := barsSinceBreakout + 1
-                else if closedInsideOrb
-                    int revDir = breakoutDir == 1 ? -1 : 1
-                    bool vwapOk = revDir == 1 ? vwapOkLong : vwapOkShort
-                    if vwapOk and not blockIfInsideOb
-                        float entryPxR = close
-                        float obStop = revDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                        float stop = revDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
-                        float target = revDir == 1 ? entryPxR + tickSz * targetTk : entryPxR - tickSz * targetTk
-                        if revDir == 1
-                            longBreak := true
-                            inLong := true
-                            entryPx := entryPxR
-                            stopPx := stop
-                            targetPx := target
-                            strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
-                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxR, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                        else
-                            shortBreak := true
-                            inShort := true
-                            entryPx := entryPxR
-                            stopPx := stop
-                            targetPx := target
-                            strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
-                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxR, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                        tradeTaken := true
-                    breakoutDir := 0
-                    barsSinceBreakout := na
-                else
-                    barsSinceBreakout := barsSinceBreakout + 1
-            else
-                // Candle 3, 4, 5... — watching indefinitely for a close back inside the ORB.
-                if closedInsideOrb
-                    int revDir = breakoutDir == 1 ? -1 : 1
-                    bool vwapOk = revDir == 1 ? vwapOkLong : vwapOkShort
-                    if vwapOk and not blockIfInsideOb
-                        float entryPxR = close
-                        float obStop = revDir == 1 ? f_nearestBullishOB(close) : f_nearestBearishOB(close)
-                        float stop = revDir == 1 ? (na(obStop) ? orLow : obStop) : (na(obStop) ? orHigh : obStop)
-                        float target = revDir == 1 ? entryPxR + tickSz * targetTk : entryPxR - tickSz * targetTk
-                        if revDir == 1
-                            longBreak := true
-                            inLong := true
-                            entryPx := entryPxR
-                            stopPx := stop
-                            targetPx := target
-                            strategy.entry(sessionLabel + "_Long", strategy.long, qty = contracts, alert_message = f_pmtMessage("buy", contracts))
-                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"LONG","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxR, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                        else
-                            shortBreak := true
-                            inShort := true
-                            entryPx := entryPxR
-                            stopPx := stop
-                            targetPx := target
-                            strategy.entry(sessionLabel + "_Short", strategy.short, qty = contracts, alert_message = f_pmtMessage("sell", contracts))
-                            alert('{"secret":"' + secret + '","action":"entry","symbol":"' + sym + '","direction":"SHORT","session":"' + sessionLabel + '","strategy":"1m ORB + VWAP","entryPrice":' + str.tostring(entryPxR, format.mintick) + ',"stopPrice":' + str.tostring(stop, format.mintick) + ',"targetPrice":' + str.tostring(target, format.mintick) + ',"contracts":' + str.tostring(contracts) + '}', alert.freq_once_per_bar_close)
-                        tradeTaken := true
-                    breakoutDir := 0
-                    barsSinceBreakout := na
-                else
-                    barsSinceBreakout := barsSinceBreakout + 1
-
+// ═════════════════════════════════════ SIGNAL STATE MACHINE ═══════════════════════════════════════
+// One per session. Returns [direction to enter on this bar (+1/-1/0), isReversal].
+// `busy` = an earlier session already signalled on this bar (only one entry per bar).
+f_signal(bool enabled, bool isFirst, float orH, float orL, bool orReady, float sStart, bool busy) =>
+    var int dir = 0
+    var int cnt = 0
+    var bool taken = false
+    if isFirst
+        dir := 0
+        cnt := 0
+        taken := false
+    int sig = 0
+    bool rev = false
+    bool inWindow = orReady and time < sStart + (orMinutes + entryWindowMin) * 60000
+    if enabled and inWindow and not taken
+        bool above = close > orH
+        bool below = close < orL
+        if above or below
+            int d = above ? 1 : -1
+            cnt := d == dir ? cnt + 1 : 1
+            dir := d
+            if allowContinuation and cnt >= confirmBars
+                sig := dir
         else
-            if closedAboveOrb or closedBelowOrb
-                breakoutDir := closedAboveOrb ? 1 : -1
-                barsSinceBreakout := 0
+            if dir != 0 and allowReversal
+                sig := -dir
+                rev := true
+            dir := 0
+            cnt := 0
+        if sig != 0
+            bool ok = not busy and (sig == 1 ? longOk : shortOk)
+            taken := ok
+            dir := 0
+            cnt := 0
+            if not ok
+                sig := 0
+                rev := false
+    [sig, rev]
 
-    [longBreak, shortBreak]
+[tkSig, tkRev] = f_signal(tradeTokyo,    tkFirst, tkH, tkL, tkReady, tkStart, false)
+[shSig, shRev] = f_signal(tradeShanghai, shFirst, shH, shL, shReady, shStart, tkSig != 0)
+[ldSig, ldRev] = f_signal(tradeLondon,   ldFirst, ldH, ldL, ldReady, ldStart, tkSig != 0 or shSig != 0)
+[nySig, nyRev] = f_signal(tradeNewYork,  nyFirst, nyH, nyL, nyReady, nyStart, tkSig != 0 or shSig != 0 or ldSig != 0)
 
-[tkLong, tkShort] = f_manageBreakout(tk_switch, tk_open_high, tk_open_low, "TOKYO",    symbolChoice, tickSize, targetTicks, webhookSecret, showTokyo,    breakoutWindowMinutes, forceFlatMinutes, orbContracts, tickDollarValue, trailArmProfit, trailTicks, closedInsideOb)
-[shLong, shShort] = f_manageBreakout(sh_switch, sh_open_high, sh_open_low, "SHANGHAI", symbolChoice, tickSize, targetTicks, webhookSecret, showShanghai, breakoutWindowMinutes, forceFlatMinutes, orbContracts, tickDollarValue, trailArmProfit, trailTicks, closedInsideOb)
-[ldLong, ldShort] = f_manageBreakout(ld_switch, ld_open_high, ld_open_low, "LONDON",   symbolChoice, tickSize, targetTicks, webhookSecret, showLondon,   breakoutWindowMinutes, forceFlatMinutes, orbContracts, tickDollarValue, trailArmProfit, trailTicks, closedInsideOb)
-[nyLong, nyShort] = f_manageBreakout(ny_switch, ny_open_high, ny_open_low, "NEW_YORK", symbolChoice, tickSize, targetTicks, webhookSecret, showNewYork,  breakoutWindowMinutes, forceFlatMinutes, orbContracts, tickDollarValue, trailArmProfit, trailTicks, closedInsideOb)
+int entrySig = tkSig != 0 ? tkSig : shSig != 0 ? shSig : ldSig != 0 ? ldSig : nySig
+bool isRev = tkSig != 0 ? tkRev : shSig != 0 ? shRev : ldSig != 0 ? ldRev : nyRev
+string sessName = tkSig != 0 ? "TOKYO" : shSig != 0 ? "SHANGHAI" : ldSig != 0 ? "LONDON" : "NEW_YORK"
 
-// ── Chart BUY/SELL markers ───────────────────────────────────────────────────
-anyLongEntry  = tkLong or shLong or ldLong or nyLong
-anyShortEntry = tkShort or shShort or ldShort or nyShort
+// ═════════════════════════════════════ ORDERS & ALERTS ════════════════════════════════════════════
+f_pmt(string side, int q, float sl, float tp) =>
+    string br = pmtBracket and not na(sl) and not na(tp) ? ',"sl":' + str.tostring(sl, format.mintick) + ',"tp":' + str.tostring(tp, format.mintick) : ""
+    pmtEnabled ? '{"symbol":"' + pmtSymbol + '","data":"' + side + '","quantity":' + str.tostring(q) + br + ',"token":"' + pmtToken + '","account_id":"' + pmtAccountId + '","order_type":"MKT"}' : ""
 
-plotshape(anyLongEntry, title = "Buy Signal", style = shape.triangleup, location = location.belowbar, color = color.new(color.teal, 0), size = size.small, text = "BUY")
-plotshape(anyShortEntry, title = "Sell Signal", style = shape.triangledown, location = location.abovebar, color = color.new(color.red, 0), size = size.small, text = "SELL")
+var string curId = ""
+var float stopPx = na
+var float tgtPx = na
+var float riskAtEntry = na
+var int curQty = 0
+var int entryT = 0
+var bool timeExitPending = false
+
+// 1) Dashboard exit alert, from the ACTUAL fill.
+if strategy.closedtrades > nz(strategy.closedtrades[1])
+    float xp = strategy.closedtrades.exit_price(strategy.closedtrades - 1)
+    string oc = timeExitPending ? ',"outcome":"CLOSED_AT_DAY_END"' : ""
+    alert('{"secret":"' + webhookSecret + '","action":"exit","symbol":"' + syminfo.root + '","timeframe":"' + timeframe.period + '","exitPrice":' + str.tostring(xp, format.mintick) + oc + '}', alert.freq_once_per_bar_close)
+    timeExitPending := false
+
+// 2) Manage the open position: break-even, trail, time exit.
+if strategy.position_size != 0
+    int d = strategy.position_size > 0 ? 1 : -1
+    float ep = strategy.position_avg_price
+    float gain = (close - ep) * d
+    if useBreakeven and gain >= beAtR * riskAtEntry
+        float be = ep + d * beOffsetTicks * syminfo.mintick
+        stopPx := d == 1 ? math.max(stopPx, be) : math.min(stopPx, be)
+    if useTrail and gain >= trailStartR * riskAtEntry
+        float tr = math.round((close - d * atr * trailAtrMult) / syminfo.mintick) * syminfo.mintick
+        stopPx := d == 1 ? math.max(stopPx, tr) : math.min(stopPx, tr)
+    if time - entryT >= forceFlatMinutes * 60000
+        timeExitPending := true
+        strategy.close(curId, comment = "TIME", alert_message = f_pmt("close", curQty, na, na))
+    else
+        strategy.exit(curId + "_X", from_entry = curId, stop = stopPx, limit = tgtPx, alert_message = f_pmt("close", curQty, na, na))
+
+// 3) New entry. Entry IDs encode session + type + side so the Strategy Tester's trade list shows which
+//    combination actually makes money (e.g. NEW_YORK_REV_S, TOKYO_CONT_L).
+if entrySig != 0
+    curId := sessName + (isRev ? "_REV" : "_CONT") + (entrySig == 1 ? "_L" : "_S")
+    riskAtEntry := riskDist
+    stopPx := close - entrySig * riskDist
+    tgtPx := entrySig == 1 ? longTgt : shortTgt
+    curQty := tradeQty
+    entryT := time
+    strategy.entry(curId, entrySig == 1 ? strategy.long : strategy.short, qty = tradeQty, alert_message = f_pmt(entrySig == 1 ? "buy" : "sell", tradeQty, stopPx, tgtPx))
+    strategy.exit(curId + "_X", from_entry = curId, stop = stopPx, limit = tgtPx, alert_message = f_pmt("close", tradeQty, na, na))
+    alert('{"secret":"' + webhookSecret + '","action":"entry","symbol":"' + syminfo.root + '","timeframe":"' + timeframe.period + '","direction":"' + (entrySig == 1 ? "LONG" : "SHORT") + '","session":"' + sessName + '","strategy":"' + strategyName + '","entryPrice":' + str.tostring(close, format.mintick) + ',"stopPrice":' + str.tostring(stopPx, format.mintick) + ',"targetPrice":' + str.tostring(tgtPx, format.mintick) + ',"contracts":' + str.tostring(tradeQty) + '}', alert.freq_once_per_bar_close)
+
+// ═════════════════════════════════════ PLOTS ══════════════════════════════════════════════════════
+plot(vwapVal, "VWAP", color = color.new(color.aqua, 0))
+
+ptH = plot(showOR and tkIn ? tkH : na, "Tokyo OR High", color = color.yellow, style = plot.style_linebr)
+ptL = plot(showOR and tkIn ? tkL : na, "Tokyo OR Low",  color = color.yellow, style = plot.style_linebr)
+fill(ptH, ptL, color = color.new(color.yellow, 85), title = "Tokyo OR")
+psH = plot(showOR and shIn ? shH : na, "Shanghai OR High", color = color.orange, style = plot.style_linebr)
+psL = plot(showOR and shIn ? shL : na, "Shanghai OR Low",  color = color.orange, style = plot.style_linebr)
+fill(psH, psL, color = color.new(color.orange, 85), title = "Shanghai OR")
+plH = plot(showOR and ldIn ? ldH : na, "London OR High", color = color.blue, style = plot.style_linebr)
+plL = plot(showOR and ldIn ? ldL : na, "London OR Low",  color = color.blue, style = plot.style_linebr)
+fill(plH, plL, color = color.new(color.blue, 80), title = "London OR")
+pnH = plot(showOR and nyIn ? nyH : na, "New York OR High", color = color.red, style = plot.style_linebr)
+pnL = plot(showOR and nyIn ? nyL : na, "New York OR Low",  color = color.red, style = plot.style_linebr)
+fill(pnH, pnL, color = color.new(color.red, 80), title = "New York OR")
+
+// Break the line where a level changes value so it doesn't draw vertical joins.
+f_br(float x) => x != x[1] ? na : x
+color lvlCol = color.new(color.gray, 30)
+plot(showLevels and lvlPrevDay ? f_br(pdh) : na, "Prev Day High", color = lvlCol, style = plot.style_linebr, linewidth = 2)
+plot(showLevels and lvlPrevDay ? f_br(pdl) : na, "Prev Day Low",  color = lvlCol, style = plot.style_linebr, linewidth = 2)
+plot(showLevels and lvlPrevWeek ? f_br(pwh) : na, "Prev Week High", color = color.new(color.purple, 30), style = plot.style_linebr, linewidth = 2)
+plot(showLevels and lvlPrevWeek ? f_br(pwl) : na, "Prev Week Low",  color = color.new(color.purple, 30), style = plot.style_linebr, linewidth = 2)
+plot(showLevels and lvlSessions ? f_br(tkLastH) : na, "Last Tokyo High",  color = color.new(color.yellow, 50), style = plot.style_linebr)
+plot(showLevels and lvlSessions ? f_br(tkLastL) : na, "Last Tokyo Low",   color = color.new(color.yellow, 50), style = plot.style_linebr)
+plot(showLevels and lvlSessions ? f_br(ldLastH) : na, "Last London High", color = color.new(color.blue, 50), style = plot.style_linebr)
+plot(showLevels and lvlSessions ? f_br(ldLastL) : na, "Last London Low",  color = color.new(color.blue, 50), style = plot.style_linebr)
+plot(showLevels and lvlSessions ? f_br(nyLastH) : na, "Last NY High",     color = color.new(color.red, 50), style = plot.style_linebr)
+plot(showLevels and lvlSessions ? f_br(nyLastL) : na, "Last NY Low",      color = color.new(color.red, 50), style = plot.style_linebr)
+
+plot(strategy.position_size != 0 ? stopPx : na, "Stop",   color = color.red,  style = plot.style_linebr, linewidth = 2)
+plot(strategy.position_size != 0 ? tgtPx : na,  "Target", color = color.lime, style = plot.style_linebr, linewidth = 2)
+
+plotshape(entrySig == 1,  "Buy",  shape.triangleup,   location.belowbar, color.teal, text = "BUY",  size = size.small)
+plotshape(entrySig == -1, "Sell", shape.triangledown, location.abovebar, color.red,  text = "SELL", size = size.small)
+
+var table info = table.new(position.top_right, 2, 6, bgcolor = color.new(color.black, 70), border_width = 1)
+if showInfo and barstate.islast
+    table.cell(info, 0, 0, "Tick value",      text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 0, "$" + str.tostring(tickValue), text_color = color.white, text_size = size.small)
+    table.cell(info, 0, 1, "Stop (ticks)",    text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 1, str.tostring(stopTicks), text_color = color.white, text_size = size.small)
+    table.cell(info, 0, 2, "Contracts now",   text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 2, str.tostring(tradeQty), text_color = tradeQty >= 1 ? color.white : color.orange, text_size = size.small)
+    table.cell(info, 0, 3, "Risk if entered", text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 3, "$" + str.tostring(tradeQty * riskPerContract, "#.##"), text_color = color.white, text_size = size.small)
+    table.cell(info, 0, 4, "Day P&L",         text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 4, "$" + str.tostring(dayPnl, "#.##"), text_color = dayPnl >= 0 ? color.lime : color.red, text_size = size.small)
+    table.cell(info, 0, 5, "Day status",      text_color = color.white, text_size = size.small)
+    table.cell(info, 1, 5, dayLocked ? "LOCKED" : "open", text_color = dayLocked ? color.orange : color.lime, text_size = size.small)
