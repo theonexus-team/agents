@@ -1,0 +1,122 @@
+<title>A Good Witch Directions</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..600,100,1;1,9..144,300..600,100,1&family=Instrument+Serif:ital@0;1&family=Instrument+Sans:wght@400;500&family=DM+Mono:wght@400&family=Manrope:wght@400;500&display=swap">
+<style>
+/* Layout: three phone frames side by side (stacking on phones), each the same Home screen in a different type direction. */
+:root {
+  color-scheme: dark;
+  --bg: #0c0910; --fg: #efe8de; --muted: rgba(239,232,222,.6); --line: rgba(239,232,222,.14); --gold: #d4b67a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Manrope", system-ui, sans-serif; padding-block: 40px 60px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { max-width: 1180px; margin: 0 auto 36px; }
+header p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.6; max-width: 60ch; }
+header h1 { font-family: "Instrument Serif", Georgia, serif; font-weight: 400; font-size: 2.6rem; margin: 0 0 10px; letter-spacing: -.01em; }
+.grid { max-width: 1180px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 1060px) { .grid { grid-template-columns: minmax(0, 1fr); max-width: 380px; } }
+.opt h2 { font-size: .72rem; letter-spacing: .2em; text-transform: uppercase; margin: 0 0 4px; color: var(--gold); font-weight: 500; }
+.opt .why { margin: 0 0 14px; font-size: .84rem; line-height: 1.5; color: var(--muted); min-height: 3.8em; }
+.ph { position: relative; width: 100%; max-width: 360px; aspect-ratio: 360 / 740; border-radius: 42px; overflow: hidden; box-shadow: 0 0 0 9px #17121b, 0 0 0 10px #2a2230, 0 40px 80px -30px #000; }
+.ph .scroll { position: absolute; inset: 0; overflow: hidden; }
+
+/* ---------- A · Couture ---------- */
+.a { background: #0b0a0c; color: #f3eee6; font-family: "Manrope", sans-serif; }
+.a .top { display: flex; justify-content: center; padding: 26px 0 0; font-family: "Bodoni Moda", serif; font-size: .78rem; letter-spacing: .5em; }
+.a .date { text-align: center; font-size: .56rem; letter-spacing: .3em; text-transform: uppercase; color: rgba(243,238,230,.5); margin-top: 8px; }
+.a .hero { margin: 22px 18px 0; height: 300px; position: relative; overflow: hidden; background: radial-gradient(circle at 62% 34%, #f6efe2 0 15%, rgba(246,239,226,.3) 16%, transparent 36%), radial-gradient(120% 90% at 50% 30%, #3b2a44, #0b0a0c 70%); }
+.a .hero::after { content: ""; position: absolute; inset: auto 0 0; height: 45%; background: linear-gradient(transparent, #0b0a0c); }
+.a h3 { font-family: "Bodoni Moda", serif; font-weight: 400; font-size: 3.6rem; line-height: .88; letter-spacing: -.03em; margin: -70px 18px 0; position: relative; z-index: 2; }
+.a h3 i { font-style: italic; }
+.a .rule { height: 1px; background: #f3eee6; opacity: .3; margin: 20px 18px; }
+.a .lab { font-size: .56rem; letter-spacing: .3em; text-transform: uppercase; color: #c7a76b; margin: 0 18px; }
+.a .aff { font-family: "Bodoni Moda", serif; font-style: italic; font-size: 1.45rem; line-height: 1.18; margin: 10px 18px 0; }
+.a .cta { margin: 22px 18px 0; display: flex; gap: 8px; }
+.a .cta span { flex: 1; text-align: center; padding: 13px 0; font-size: .56rem; letter-spacing: .3em; text-transform: uppercase; border: 1px solid rgba(243,238,230,.35); }
+.a .cta span:first-child { background: #f3eee6; color: #0b0a0c; border-color: #f3eee6; }
+.a .tabs { position: absolute; inset: auto 0 0; display: flex; justify-content: space-around; padding: 14px 10px 22px; border-top: 1px solid rgba(243,238,230,.15); background: #0b0a0c; font-size: .52rem; letter-spacing: .22em; text-transform: uppercase; color: rgba(243,238,230,.45); }
+.a .tabs b { font-weight: 400; color: #f3eee6; border-bottom: 1px solid #f3eee6; padding-bottom: 3px; }
+
+/* ---------- B · Enchanted ---------- */
+.b { background: #f3e9e3; color: #3a1d3f; font-family: "Instrument Sans", sans-serif; }
+.b .top { display: flex; justify-content: space-between; align-items: center; padding: 26px 20px 0; }
+.b .wm { font-family: "Fraunces", serif; font-variation-settings: "SOFT" 100, "WONK" 1; font-weight: 500; font-size: 1.15rem; font-style: italic; }
+.b .pill { font-size: .62rem; padding: 6px 11px; border-radius: 99px; background: #3a1d3f; color: #f3e9e3; }
+.b h3 { font-family: "Fraunces", serif; font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144; font-weight: 400; font-size: 3.1rem; line-height: .95; letter-spacing: -.035em; margin: 22px 20px 0; }
+.b h3 i { color: #9b4f86; }
+.b .sub { margin: 10px 20px 0; font-size: .84rem; line-height: 1.5; color: rgba(58,29,63,.7); }
+.b .card { margin: 20px 16px 0; border-radius: 30px; padding: 22px 20px; position: relative; overflow: hidden; color: #fbf3ee; background: radial-gradient(circle at 78% 22%, #ffe9c9 0 9%, rgba(255,233,201,.25) 10%, transparent 30%), linear-gradient(160deg, #7c3f78, #3a1d3f 75%); box-shadow: 0 20px 40px -20px rgba(58,29,63,.6); }
+.b .card small { font-size: .62rem; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+.b .card p { font-family: "Fraunces", serif; font-variation-settings: "SOFT" 100, "WONK" 1; font-style: italic; font-weight: 400; font-size: 1.55rem; line-height: 1.12; margin: 46px 0 18px; letter-spacing: -.01em; }
+.b .card .row { display: flex; gap: 6px; }
+.b .card .row span { font-size: .68rem; padding: 8px 13px; border-radius: 99px; background: rgba(251,243,238,.16); }
+.b .card .row span:first-child { background: #fbf3ee; color: #3a1d3f; }
+.b .chips { display: flex; gap: 8px; margin: 18px 16px 0; overflow: hidden; }
+.b .chips span { flex-shrink: 0; padding: 14px 16px; border-radius: 22px; background: #fff7f2; font-family: "Fraunces", serif; font-variation-settings: "SOFT" 100; font-size: .95rem; box-shadow: 0 1px 0 rgba(58,29,63,.08); }
+.b .tabs { position: absolute; left: 14px; right: 14px; bottom: 16px; display: flex; justify-content: space-around; padding: 12px 8px; border-radius: 24px; background: #3a1d3f; color: rgba(243,233,227,.55); font-size: .62rem; }
+.b .tabs b { font-weight: 500; color: #3a1d3f; background: #f3c9d9; padding: 4px 10px; border-radius: 99px; }
+
+/* ---------- C · Celestial ---------- */
+.c { background: #08070b; color: #e9e4f2; font-family: "Manrope", sans-serif; }
+.c .top { display: flex; justify-content: space-between; padding: 26px 20px 0; font-family: "DM Mono", monospace; font-size: .6rem; letter-spacing: .08em; color: rgba(233,228,242,.55); text-transform: uppercase; }
+.c .orb { margin: 26px auto 0; width: 190px; height: 190px; border-radius: 50%; position: relative; background: radial-gradient(circle at 38% 34%, #f4f0ff, #b9a8e0 38%, #4b3a78 70%, #1a1430); box-shadow: 0 0 80px 10px rgba(150,120,230,.35); }
+.c .orb::before { content: ""; position: absolute; inset: -22px; border-radius: 50%; border: 1px solid rgba(233,228,242,.18); }
+.c .orb::after { content: ""; position: absolute; inset: -46px; border-radius: 50%; border: 1px dashed rgba(233,228,242,.12); }
+.c .mono { font-family: "DM Mono", monospace; font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: #b9a8e0; text-align: center; margin-top: 62px; }
+.c h3 { font-family: "Instrument Serif", serif; font-weight: 400; font-size: 2.55rem; line-height: 1; text-align: center; margin: 10px 22px 0; letter-spacing: -.01em; }
+.c h3 i { color: #cbbcf2; }
+.c .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; margin: 24px 18px 0; border-top: 1px solid rgba(233,228,242,.14); border-bottom: 1px solid rgba(233,228,242,.14); }
+.c .meta div { padding: 12px 8px; text-align: center; font-family: "DM Mono", monospace; font-size: .55rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(233,228,242,.5); }
+.c .meta div + div { border-left: 1px solid rgba(233,228,242,.14); }
+.c .meta b { display: block; font-family: "Instrument Serif", serif; font-weight: 400; font-size: 1.05rem; text-transform: none; letter-spacing: 0; color: #e9e4f2; margin-top: 4px; }
+.c .tabs { position: absolute; inset: auto 0 0; display: flex; justify-content: space-around; padding: 16px 10px 22px; font-family: "DM Mono", monospace; font-size: .55rem; text-transform: uppercase; letter-spacing: .08em; color: rgba(233,228,242,.4); }
+.c .tabs b { font-weight: 400; color: #e9e4f2; }
+.c .tabs b::before { content: "● "; color: #b9a8e0; }
+.stars { position: absolute; inset: 0; background-image: radial-gradient(1px 1px at 20% 12%, #fff8, transparent), radial-gradient(1px 1px at 80% 18%, #fff6, transparent), radial-gradient(1px 1px at 65% 40%, #fff5, transparent), radial-gradient(1px 1px at 12% 52%, #fff6, transparent), radial-gradient(1.5px 1.5px at 90% 60%, #fff8, transparent), radial-gradient(1px 1px at 35% 30%, #fff4, transparent); pointer-events: none; }
+</style>
+
+<header>
+  <h1>Pick a direction</h1>
+  <p>The same Home screen in three directions. Each changes the fonts, colours and overall mood. Tell me A, B or C, or mix them (for example, "B's fonts with A's colours"), and I'll rebuild the whole prototype in that style.</p>
+</header>
+<div class="grid">
+  <section class="opt">
+    <h2>A · Couture</h2>
+    <p class="why">High-fashion editorial. A dramatic Bodoni serif at huge sizes, black and ivory with a touch of gold. Feels like a luxury magazine.</p>
+    <div class="ph a"><div class="scroll">
+      <div class="top">A GOOD WITCH</div><div class="date">Thursday · Waxing Crescent</div>
+      <div class="hero"></div>
+      <h3>Welcome<br>back, <i>witch.</i></h3>
+      <div class="rule"></div>
+      <p class="lab">Today's affirmation</p>
+      <p class="aff">“I give myself permission to grow, release, and become.”</p>
+      <div class="cta"><span>Reflect</span><span>Save</span></div>
+      <div class="tabs"><b>Home</b><span>Daily</span><span>Coven</span><span>Readings</span><span>Shop</span></div>
+    </div></div>
+  </section>
+  <section class="opt">
+    <h2>B · Enchanted</h2>
+    <p class="why">Warm, soft and personal. A rounded, slightly whimsical serif on blush ivory with deep plum. Feminine and modern rather than dark and moody.</p>
+    <div class="ph b"><div class="scroll">
+      <div class="top"><span class="wm">a good witch</span><span class="pill">✦ 3 day ritual</span></div>
+      <h3>Welcome back, <i>witch.</i></h3>
+      <p class="sub">Your daily dose of magic is waiting.</p>
+      <div class="card"><small>Today's magic</small><p>“I give myself permission to grow, release, and become.”</p><div class="row"><span>Save</span><span>Share</span><span>Reflect</span></div></div>
+      <div class="chips"><span>Daily Magic</span><span>The Coven</span><span>Readings</span></div>
+      <div class="tabs"><b>Home</b><span>Daily</span><span>Coven</span><span>Readings</span><span>Shop</span></div>
+    </div></div>
+  </section>
+  <section class="opt">
+    <h2>C · Celestial</h2>
+    <p class="why">Modern astrology app. A crisp editorial serif with typewriter-style labels, deep black and lavender, glowing orb visuals. Minimal and current.</p>
+    <div class="ph c"><div class="scroll"><div class="stars"></div>
+      <div class="top"><span>A Good Witch</span><span>Thu 12 Nov</span></div>
+      <div class="orb"></div>
+      <p class="mono">Today's affirmation</p>
+      <h3>I give myself permission to grow, release, and <i>become.</i></h3>
+      <div class="meta"><div>Moon<b>Crescent</b></div><div>Energy<b>Becoming</b></div><div>Ritual<b>Release</b></div></div>
+      <div class="tabs"><b>Home</b><span>Daily</span><span>Coven</span><span>Read</span><span>Shop</span></div>
+    </div></div>
+  </section>
+</div>
