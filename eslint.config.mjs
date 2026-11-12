@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Standalone sub-app with its own config
+    "good-witch/**",
   ]),
 ]);
 
