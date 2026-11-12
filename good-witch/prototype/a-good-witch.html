@@ -1,0 +1,725 @@
+<title>A Good Witch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap">
+<style>
+/* Layout: on desktop the app sits in a phone frame beside a screen guide for client walkthroughs; on phones it fills the screen. */
+:root {
+  color-scheme: light;
+  --night: #120a1a; --plum: #2b1636; --plum-2: #3a1f48; --plum-3: #4d2a5e; --plum-4: #66397a;
+  --lav: #a98bbd; --lav-2: #c4aed3; --lav-3: #ddd0e6; --lav-4: #eee6f2;
+  --ivory: #f8f2e8; --ivory-2: #fdfaf4; --gold: #cfb173; --gold-2: #e2cb94; --gold-3: #957543;
+  --ink: #1c1024; --muted: #6e5a7a; --line: rgba(184,150,90,.24);
+  --serif: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --sans: "Jost", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: #e9e1ea; color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+input, textarea { font: inherit; }
+:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+/* ---------- stage ---------- */
+.stage { min-height: 100%; display: flex; align-items: center; justify-content: center; gap: 56px; padding-block: 32px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: radial-gradient(1200px 700px at 70% 20%, #d8c8df, transparent), radial-gradient(900px 600px at 10% 90%, #efe4d4, transparent), #e9e1ea; }
+.guide { width: 300px; flex-shrink: 0; }
+.guide h1 { font-family: var(--serif); font-weight: 500; font-size: 2.6rem; line-height: 1; margin: 10px 0 12px; color: var(--plum); letter-spacing: .02em; text-wrap: balance; }
+.guide p { color: var(--muted); line-height: 1.55; font-size: .92rem; margin: 0 0 18px; }
+.guide .eyebrow { color: var(--gold-3); }
+.guide ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.guide li button { width: 100%; text-align: left; display: flex; gap: 12px; align-items: baseline; padding: 8px 12px; border-radius: 10px; color: var(--plum-3); font-size: .9rem; }
+.guide li button span { font-variant-numeric: tabular-nums; color: var(--gold-3); font-size: .72rem; width: 18px; }
+.guide li button:hover { background: rgba(77,42,94,.07); }
+.guide li button.on { background: var(--plum); color: var(--ivory-2); }
+.guide li button.on span { color: var(--gold-2); }
+.guide .note { margin-top: 18px; font-size: .72rem; line-height: 1.5; color: #8a7894; border-top: 1px solid rgba(77,42,94,.12); padding-top: 14px; }
+.copy { margin-top: 14px; display: flex; gap: 8px; }
+.copy input { flex: 1; min-width: 0; border: 1px solid rgba(77,42,94,.2); border-radius: 999px; padding: 8px 12px; font-size: .75rem; color: var(--muted); background: var(--ivory-2); }
+
+.phone { width: 390px; height: 844px; max-height: calc(100vh - 64px); border-radius: 48px; padding: 10px; background: #160c1d; box-shadow: 0 40px 80px -30px rgba(18,10,26,.6), inset 0 0 0 2px #3a2a44; position: relative; flex-shrink: 0; }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 38px; overflow: hidden; background: var(--ivory); display: flex; flex-direction: column; }
+.notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 110px; height: 30px; border-radius: 20px; background: #160c1d; z-index: 30; }
+@media (max-width: 860px) {
+  .guide { display: none; }
+  .stage { padding: 0; display: block; height: 100%; background: var(--ivory); }
+  .phone { width: 100%; height: 100%; max-height: none; border-radius: 0; padding: 0; box-shadow: none; background: var(--ivory); }
+  .screen { border-radius: 0; }
+  .notch { display: none; }
+}
+
+/* ---------- app chrome ---------- */
+.top { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 44px 16px 10px; background: rgba(248,242,232,.94); border-bottom: 1px solid var(--line); z-index: 5; }
+@media (max-width: 860px) { .top { padding-top: 12px; } }
+.mark { font-family: var(--serif); font-weight: 500; letter-spacing: .3em; font-size: 1rem; color: var(--plum); white-space: nowrap; }
+.mark i { font-style: normal; color: var(--gold); font-size: .5rem; vertical-align: middle; margin: 0 6px; }
+.iconbtn { width: 36px; height: 36px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; position: relative; color: var(--plum-3); }
+.badge { position: absolute; top: -2px; right: -2px; min-width: 17px; height: 17px; border-radius: 9px; background: var(--gold-3); color: #fff; font-size: .6rem; font-weight: 500; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.banner { flex-shrink: 0; background: var(--plum); color: var(--lav-3); text-align: center; font-size: .56rem; letter-spacing: .18em; text-transform: uppercase; padding: 5px 8px; }
+.view { flex: 1; overflow-y: auto; overflow-x: hidden; scroll-behavior: smooth; padding-bottom: 28px; }
+.view > * { animation: rise .45s cubic-bezier(.22,1,.36,1) both; }
+.tabs { flex-shrink: 0; display: grid; grid-template-columns: repeat(5, 1fr); background: var(--plum); border-top: 1px solid rgba(207,177,115,.25); padding-bottom: max(14px, env(safe-area-inset-bottom, 0px)); }
+.tabs button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 4px; font-size: .58rem; letter-spacing: .06em; color: rgba(221,208,230,.6); position: relative; }
+.tabs button.on { color: var(--gold-2); }
+.tabs button.on::before { content: ""; position: absolute; top: 0; width: 28px; height: 2px; border-radius: 2px; background: var(--gold-2); }
+svg.i { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+svg.i.sm { width: 15px; height: 15px; }
+
+/* ---------- type + pieces ---------- */
+.eyebrow { font-size: .62rem; font-weight: 500; letter-spacing: .22em; text-transform: uppercase; color: var(--gold-3); margin: 0; }
+.display { font-family: var(--serif); font-weight: 500; line-height: 1.08; margin: 0; text-wrap: balance; }
+.pad { padding: 0 16px; }
+.h1 { font-size: 2.3rem; color: var(--plum); margin-top: 6px; }
+.sub { color: var(--muted); margin: 8px 0 0; line-height: 1.55; font-size: .92rem; }
+.sec { margin-top: 30px; }
+.sec-h { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.sec-h h2 { font-size: 1.6rem; color: var(--plum); }
+.orn { display: flex; align-items: center; gap: 10px; color: var(--gold); font-size: .45rem; margin: 18px 0; }
+.orn::before, .orn::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, currentColor, transparent); opacity: .6; }
+.card { background: var(--ivory-2); border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 1px 2px rgba(43,22,54,.05), 0 10px 26px -14px rgba(43,22,54,.25); }
+.dark { background: var(--plum); color: var(--ivory-2); border-radius: 22px; overflow: hidden; position: relative; box-shadow: 0 20px 44px -22px rgba(18,10,26,.7); }
+.dark .eyebrow { color: var(--gold-2); }
+.art { position: relative; overflow: hidden; }
+.art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.fade-b::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, var(--plum) 0%, rgba(43,22,54,.25) 55%, transparent); pointer-events: none; }
+.fade-n::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(18,10,26,.92), rgba(18,10,26,.15) 60%, transparent); pointer-events: none; }
+.tag { display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(149,117,67,.35); border-radius: 999px; padding: 4px 10px; font-size: .55rem; letter-spacing: .16em; text-transform: uppercase; color: var(--gold-3); background: var(--ivory-2); white-space: nowrap; }
+.tag.dk { background: rgba(18,10,26,.45); color: var(--gold-2); border-color: rgba(226,203,148,.4); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 22px; border-radius: 999px; font-size: .66rem; font-weight: 500; letter-spacing: .18em; text-transform: uppercase; transition: transform .15s, background .2s; white-space: nowrap; }
+.btn:active { transform: scale(.97); }
+.btn.sm { height: 36px; padding: 0 15px; font-size: .6rem; }
+.btn.full { width: 100%; }
+.b-plum { background: var(--plum-2); color: var(--ivory-2); }
+.b-gold { background: var(--gold); color: var(--night); }
+.b-line { border: 1px solid rgba(58,31,72,.25); color: var(--plum-2); }
+.b-lineL { border: 1px solid rgba(253,250,244,.35); color: var(--ivory-2); }
+.b-ivory { background: var(--ivory-2); color: var(--plum); }
+.btn[disabled] { opacity: .4; pointer-events: none; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { border: 1px solid rgba(58,31,72,.18); border-radius: 999px; padding: 8px 14px; font-size: .82rem; color: var(--plum-2); background: var(--ivory-2); white-space: nowrap; }
+.chip.on { background: var(--plum-2); color: var(--ivory-2); border-color: var(--plum-2); }
+.dark .chip { background: transparent; border-color: rgba(253,250,244,.22); color: var(--lav-4); }
+.dark .chip.on { background: var(--gold-2); color: var(--night); border-color: var(--gold-2); }
+.round { width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(58,31,72,.15); display: inline-flex; align-items: center; justify-content: center; color: var(--plum-2); }
+.dark .round { border-color: rgba(253,250,244,.25); color: var(--ivory-2); }
+.round.on { background: var(--gold); border-color: var(--gold); color: var(--night); }
+.field { width: 100%; border: 1px solid rgba(184,150,90,.35); background: #fff; border-radius: 14px; padding: 12px 14px; font-size: .92rem; color: var(--ink); }
+.field:focus { outline: none; border-color: var(--plum-4); box-shadow: 0 0 0 3px rgba(169,139,189,.25); }
+textarea.field { min-height: 120px; resize: none; line-height: 1.55; }
+.dark .field { background: rgba(255,255,255,.06); border-color: rgba(226,203,148,.28); color: var(--ivory-2); }
+.dark .field::placeholder { color: rgba(238,230,242,.45); }
+label.lb { display: block; }
+label.lb > span { display: block; font-size: .6rem; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; font-weight: 500; }
+.stack { display: grid; gap: 14px; }
+.hint { font-size: .72rem; color: #8b7a95; margin: 6px 0 0; }
+.err { font-size: .75rem; color: #a33a4f; margin: 4px 0 0; }
+.note { font-size: .68rem; color: #8b7a95; line-height: 1.5; text-align: center; padding: 18px 24px 0; margin: 0; }
+.hscroll { display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none; padding: 0 16px 4px; scroll-snap-type: x mandatory; }
+.hscroll::-webkit-scrollbar { display: none; }
+.tile { flex-shrink: 0; width: 150px; border-radius: 18px; overflow: hidden; position: relative; scroll-snap-align: start; text-align: left; color: var(--ivory-2); box-shadow: 0 10px 22px -14px rgba(43,22,54,.5); }
+.tile .art { aspect-ratio: 3/4; }
+.tile .cap { position: absolute; inset: auto 0 0; padding: 12px; z-index: 2; }
+.tile .cap b { display: block; font-family: var(--serif); font-weight: 500; font-size: 1.15rem; line-height: 1.1; }
+.tile .cap small { font-size: .66rem; color: var(--lav-3); }
+.avatar { border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--serif); color: var(--ivory-2); flex-shrink: 0; box-shadow: 0 0 0 2px var(--ivory-2); }
+.post { padding: 16px; }
+.post .who { display: flex; gap: 10px; align-items: center; }
+.post .who b { font-size: .85rem; font-weight: 500; color: var(--plum); display: block; }
+.post .who small { font-size: .7rem; color: #8b7a95; }
+.topic { margin-left: auto; background: var(--lav-4); color: var(--plum-3); font-size: .55rem; letter-spacing: .12em; text-transform: uppercase; padding: 4px 9px; border-radius: 999px; white-space: nowrap; }
+.prompt { font-family: var(--serif); font-style: italic; color: #7d6889; margin: 12px 0 4px; font-size: 1rem; }
+.post p.body { margin: 0; line-height: 1.55; font-size: .9rem; color: var(--ink); }
+.acts { display: flex; gap: 4px; border-top: 1px solid var(--line); margin: 12px -16px -16px; padding: 6px 8px; }
+.acts button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 999px; font-size: .8rem; color: var(--plum-3); font-variant-numeric: tabular-nums; }
+.acts button.on { color: #a33a6b; }
+.qty { display: inline-flex; align-items: center; gap: 12px; border: 1px solid rgba(58,31,72,.18); border-radius: 999px; padding: 4px 6px; }
+.qty button { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+.qty span { width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.seg { display: grid; grid-template-columns: repeat(4,1fr); gap: 4px; background: var(--ivory-2); border: 1px solid var(--line); border-radius: 999px; padding: 4px; }
+.seg button { border-radius: 999px; padding: 8px 2px; font-size: .64rem; color: var(--plum-3); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.seg button.on { background: var(--plum-2); color: var(--ivory-2); }
+.empty { border: 1px dashed rgba(149,117,67,.45); border-radius: 18px; padding: 28px 20px; text-align: center; background: rgba(253,250,244,.6); }
+.empty b { font-family: var(--serif); font-weight: 500; font-size: 1.25rem; color: var(--plum); display: block; }
+.empty p { font-size: .82rem; color: var(--muted); margin: 6px 0 14px; line-height: 1.5; }
+.entry { padding: 14px 16px; }
+.entry p { margin: 6px 0 0; line-height: 1.5; font-size: .9rem; white-space: pre-wrap; }
+.list { display: grid; gap: 10px; }
+
+/* overlay sheet */
+.sheet-wrap { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; }
+.sheet-wrap[hidden] { display: none !important; }
+.scrim { position: absolute; inset: 0; background: rgba(18,10,26,.55); animation: fade .3s both; }
+.sheet { position: relative; width: 100%; max-height: 88%; overflow-y: auto; background: var(--ivory-2); border-radius: 26px 26px 0 0; padding: 22px 20px max(24px, env(safe-area-inset-bottom, 0px)); animation: sheet .4s cubic-bezier(.22,1,.36,1) both; }
+.sheet.dk { background: var(--night); color: var(--ivory-2); }
+.sheet .x { position: absolute; top: 16px; right: 16px; width: 34px; height: 34px; border-radius: 50%; background: rgba(77,42,94,.08); display: inline-flex; align-items: center; justify-content: center; }
+.sheet.dk .x { background: rgba(253,250,244,.1); }
+.sheet h3 { font-size: 1.7rem; color: var(--plum); margin: 4px 40px 14px 0; }
+.sheet.dk h3 { color: var(--ivory-2); }
+.toast { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 60; background: var(--night); color: var(--ivory-2); border: 1px solid rgba(207,177,115,.35); padding: 11px 18px; border-radius: 999px; font-size: .8rem; white-space: nowrap; max-width: 92%; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 18px 30px -16px rgba(0,0,0,.6); animation: rise .35s both; }
+
+/* welcome */
+.welcome { position: absolute; inset: 0; z-index: 20; background: var(--night); color: var(--ivory-2); display: flex; flex-direction: column; overflow-y: auto; }
+.welcome .art { position: absolute; inset: 0 0 auto; height: 64%; }
+.welcome .art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, var(--night), rgba(18,10,26,.1) 45%, rgba(18,10,26,.35)); }
+.welcome .in { position: relative; z-index: 2; display: flex; flex-direction: column; min-height: 100%; padding: 50px 24px 30px; }
+@media (max-width: 860px) { .welcome .in { padding-top: 20px; } }
+.welcome .mark { color: var(--ivory-2); }
+.welcome h1 { font-size: 2.55rem; margin: 14px 0 0; }
+.welcome p.lead { color: rgba(238,230,242,.85); line-height: 1.6; font-size: .95rem; margin: 0; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sheet { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes flick { 0%,100% { transform: scaleY(1); } 40% { transform: scaleY(1.09) translateY(-.6px); } 70% { transform: scaleY(.95); } }
+@keyframes drift { 0% { opacity: 1; transform: none; filter: blur(0); } 100% { opacity: 0; transform: translateY(-70px) scale(.96); filter: blur(10px); letter-spacing: .25em; } }
+.flame { transform-box: fill-box; transform-origin: 50% 100%; animation: flick 3s ease-in-out infinite; }
+.drift { animation: drift 2.2s cubic-bezier(.4,0,.2,1) forwards; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; } }
+</style>
+
+<div class="stage">
+  <aside class="guide" aria-label="Screen guide">
+    <p class="eyebrow">App concept · clickable prototype</p>
+    <h1>A Good Witch</h1>
+    <p>Your daily magic, your community, your journey. Tap through the phone, or jump to any screen below. Every button works.</p>
+    <ol id="guide"></ol>
+    <p class="note">Independent concept prototype inspired by the publicly visible A Good Witch brand. Not an official product or an authorized collaboration. Members, posts, events and messages are fictional. Nothing is booked, sent or charged.</p>
+  </aside>
+  <div class="phone">
+    <div class="screen" id="screen">
+      <div class="notch"></div>
+      <header class="top" id="top">
+        <button class="iconbtn" data-go="profile" aria-label="My profile" id="topAvatar"></button>
+        <button class="mark" data-go="home">A GOOD WITCH</button>
+        <button class="iconbtn" data-go="bag" aria-label="Shopping bag" id="topBag"></button>
+      </header>
+      <button class="banner" id="banner" data-act="about">Concept prototype · not an official app · tap to learn more</button>
+      <main class="view" id="view"></main>
+      <nav class="tabs" id="tabs" aria-label="Main"></nav>
+      <div class="sheet-wrap" id="sheetWrap" hidden><div class="scrim" data-act="close"></div><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= icons ================= */
+const P = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 4.8"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+  store: '<path d="M4 9h16l-1-5H5zM5 9v11h14V9M9 20v-6h6v6"/>',
+  bag: '<path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  book: '<path d="M6 3h11v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM4 17a2 2 0 0 1 2-2h11"/>',
+  heart: '<path d="M12 20s-7.5-4.6-9-9.2C2 7.5 4.3 5 7 5c2 0 3.4 1.2 5 3 1.6-1.8 3-3 5-3 2.7 0 5 2.5 4 5.8C19.5 15.4 12 20 12 20z"/>',
+  share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
+  feather: '<path d="M20 4c-8 0-14 6-14 14v2M6 18l8-8M20 4c0 8-5 12-11 12"/>',
+  mark: '<path d="M6 3h12v18l-6-4-6 4z"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  left: '<path d="m15 5-7 7 7 7"/>', right: '<path d="m9 5 7 7-7 7"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>',
+  play: '<path d="M8 5v14l11-7z" fill="currentColor"/>', pause: '<path d="M8 5v14M16 5v14"/>',
+  wind: '<path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h7"/>',
+  flame: '<path d="M12 21c-4 0-6-3-6-6 0-4 4-6 4-10 3 2 4 5 4 7 1-1 2-2 2-4 2 2 2 4 2 7 0 3-2 6-6 6z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',
+  cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  crown: '<path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>',
+  pin: '<path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  check: '<path d="m5 12 5 5L20 7"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  send: '<path d="M21 3 10 14M21 3l-7 18-4-7-7-4z"/>', lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>', pen: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+};
+const ic = (n, cls = '', fill = false) => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true"${fill ? ' style="fill:currentColor"' : ''}>${P[n]}</svg>`;
+
+/* ================= scenes (drawn still lifes in place of photography) ================= */
+let SID = 0;
+function rng(seed) { let a = (seed * 2654435761) >>> 0; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const stars = (seed, n, maxY) => { const r = rng(seed); let s = ''; for (let i = 0; i < n; i++) { const z = r() * 1.1 + .3; s += `<circle cx="${(r()*400).toFixed(1)}" cy="${(r()*maxY).toFixed(1)}" r="${z.toFixed(2)}" fill="#fdfaf4" opacity="${(.35+z/2.4).toFixed(2)}"/>`; } return s; };
+const bokeh = (id, seed, n, color = '#e2cb94', op = .3) => { const r = rng(seed + 9); let s = `<g filter="url(#${id}b)">`; for (let i = 0; i < n; i++) { const k = r(); s += `<circle cx="${(r()*400).toFixed(1)}" cy="${(r()*330).toFixed(1)}" r="${(3+k*14).toFixed(1)}" fill="${color}" opacity="${((.25+k*.75)*op).toFixed(2)}"/>`; } return s + '</g>'; };
+const blur = (id, sd) => `<filter id="${id}" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="${sd}"/></filter>`;
+const rose = (x, y, r, c1, c2) => `<g transform="translate(${x} ${y})"><circle r="${r}" fill="${c1}"/><circle r="${r*.82}" cx="${r*.08}" cy="${-r*.06}" fill="${c2}" opacity=".85"/><path d="M${-r*.5} 0 A ${r*.5} ${r*.5} 0 1 1 ${r*.5} ${r*.1}" fill="none" stroke="${c1}" stroke-width="${r*.14}"/><path d="M${-r*.22} ${-r*.05} A ${r*.25} ${r*.25} 0 1 0 ${r*.22} ${r*.08}" fill="none" stroke="${c1}" stroke-width="${r*.12}"/></g>`;
+const bloom = (x, y, r, c, ctr = '#e2cb94') => `<g transform="translate(${x} ${y})">${[0,72,144,216,288].map(a => `<ellipse cy="${-r*.6}" rx="${r*.42}" ry="${r*.62}" fill="${c}" transform="rotate(${a})"/>`).join('')}<circle r="${r*.25}" fill="${ctr}"/></g>`;
+const lav = (x, y, h, a, c = '#a98bbd') => { let s = `<g transform="translate(${x} ${y}) rotate(${a})"><path d="M0 0V${-h}" stroke="#5f6b4a" stroke-width="1.4"/>`; for (let i = 0; i < 9; i++) { const yy = -h + i * 5.5; s += `<ellipse cx="-2.2" cy="${yy}" rx="2.2" ry="3.4" fill="${c}" transform="rotate(-20 -2.2 ${yy})"/><ellipse cx="2.2" cy="${yy+2}" rx="2.2" ry="3.4" fill="${c}" opacity=".85" transform="rotate(20 2.2 ${yy+2})"/>`; } return s + '</g>'; };
+const leaf = (x, y, s, a, c = '#55643f') => `<g transform="translate(${x} ${y}) rotate(${a}) scale(${s})"><path d="M0 0C8-10 8-26 0-36C-8-26-8-10 0 0Z" fill="${c}"/></g>`;
+function hat(id, light) {
+  return `<defs><linearGradient id="${id}c" x1="0" x2="1"><stop offset="0" stop-color="#1f0f27"/><stop offset=".45" stop-color="#4d2a5e"/><stop offset=".7" stop-color="#66397a"/><stop offset="1" stop-color="#2b1636"/></linearGradient>
+  <radialGradient id="${id}r" cx=".55" cy=".35" r=".7"><stop offset="0" stop-color="#7f4e95"/><stop offset=".55" stop-color="#4d2a5e"/><stop offset="1" stop-color="#1f0f27"/></radialGradient>
+  <linearGradient id="${id}g" x1="0" x2="1"><stop offset="0" stop-color="#6b5330"/><stop offset=".5" stop-color="#e2cb94"/><stop offset="1" stop-color="#7b6136"/></linearGradient>${blur(id+'s', 10)}${blur(id+'f', 3)}</defs>
+  <ellipse cx="6" cy="20" rx="160" ry="26" fill="${light ? '#4d2a5e' : '#000'}" opacity="${light ? .22 : .5}" filter="url(#${id}s)"/>
+  <ellipse rx="150" ry="34" fill="url(#${id}r)"/>
+  <path d="M-82-6C-62-80-38-150-12-200C4-232 26-256 64-268C48-250 38-224 36-194C40-128 60-62 84-6C40 6-40 6-82-6Z" fill="url(#${id}c)"/>
+  <path d="M20-150C24-100 40-50 58-10" fill="none" stroke="#c4aed3" stroke-opacity=".18" stroke-width="6" stroke-linecap="round"/>
+  <path d="M-79-18C-40-6 40-6 80-18L76-40C36-30-34-30-72-40Z" fill="url(#${id}g)"/>
+  <g transform="translate(30 -27)"><circle r="9" fill="#e2cb94"/><circle cx="4" cy="-2" r="8" fill="#957543"/></g>
+  <path d="M-150 0C-130 30 130 30 150 0C120 22-120 22-150 0Z" fill="#1f0f27" opacity=".65"/>
+  <ellipse cx="-40" cy="-8" rx="70" ry="16" fill="#000" opacity=".3" filter="url(#${id}f)"/>
+  ${lav(-100,-14,58,-38)}${lav(-90,-12,66,-24,'#c4aed3')}${lav(-20,-14,52,16)}${leaf(-112,-12,.9,-70)}${leaf(-4,-12,.8,60,'#6b7a50')}
+  ${rose(-78,-22,17,'#5c2141','#8a3a63')}${rose(-46,-18,14,'#efe6d6','#fdfaf4')}${rose(-104,-26,11,'#7b4a8f','#a37bb7')}${bloom(-26,-24,8,'#ddd0e6')}${bloom(-122,-22,6,'#fdfaf4')}${bloom(-60,-38,6,'#c4aed3')}`;
+}
+const flameDefs = id => `<radialGradient id="${id}gl"><stop offset="0" stop-color="#ffd98a" stop-opacity=".55"/><stop offset=".35" stop-color="#e2a65a" stop-opacity=".18"/><stop offset="1" stop-color="#e2a65a" stop-opacity="0"/></radialGradient><linearGradient id="${id}fl" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff9d3b"/><stop offset=".5" stop-color="#ffd27a"/><stop offset="1" stop-color="#fff4cf"/></linearGradient><linearGradient id="${id}wx" x1="0" x2="1"><stop offset="0" stop-color="#d9cbb3"/><stop offset=".4" stop-color="#fbf5ea"/><stop offset="1" stop-color="#bfae92"/></linearGradient>`;
+const candle = (id, x, base, h, w) => { const t = base - h, s = w / 34; return `<rect x="${x-w/2}" y="${t}" width="${w}" height="${h}" rx="${w*.12}" fill="url(#${id}wx)"/><path d="M${x-w/2} ${t+6}q${w*.12} 18 ${w*.2} 0q${w*.1} 28 ${w*.22} 2q${w*.12} 12 ${w*.24}-2L${x+w/2} ${t+4}V${t}H${x-w/2}Z" fill="#fdfaf4" opacity=".9"/><ellipse cx="${x}" cy="${t+1}" rx="${w/2}" ry="${w*.12}" fill="#fff8ea"/><path d="M${x} ${t}v-7" stroke="#2a1a12" stroke-width="1.6"/><g transform="translate(${x} ${t-6}) scale(${s})"><circle r="60" fill="url(#${id}gl)"/><g class="flame"><path d="M0 0C-7-8-6-18 0-30C6-18 7-8 0 0Z" fill="url(#${id}fl)"/><path d="M0-2C-3-6-2.5-11 0-16C2.5-11 3-6 0-2Z" fill="#fffbe9"/></g></g>`; };
+const SCENES = {
+  hat: id => `<defs><radialGradient id="${id}bg" cx=".7" cy=".2" r="1"><stop offset="0" stop-color="#5a3470"/><stop offset=".45" stop-color="#2b1636"/><stop offset="1" stop-color="#120a1a"/></radialGradient><radialGradient id="${id}mg"><stop offset="0" stop-color="#fdfaf4" stop-opacity=".55"/><stop offset="1" stop-color="#fdfaf4" stop-opacity="0"/></radialGradient>${blur(id+'b',2.2)}${blur(id+'m',18)}</defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/>${stars(4,30,230)}<circle cx="300" cy="110" r="120" fill="url(#${id}mg)"/><circle cx="300" cy="110" r="40" fill="#f8f2e8"/><circle cx="288" cy="100" r="7" fill="#e3d6c0" opacity=".6"/><circle cx="312" cy="124" r="5" fill="#e3d6c0" opacity=".5"/>${bokeh(id,3,12)}
+    <rect y="380" width="400" height="120" fill="#1a0e22"/><ellipse cx="200" cy="380" rx="260" ry="26" fill="#a98bbd" opacity=".12" filter="url(#${id}m)"/><g transform="translate(205 392)">${hat(id+'h')}</g>${lav(330,470,70,-12)}${lav(345,472,60,8,'#c4aed3')}${bloom(60,455,7,'#ddd0e6')}`,
+  moon: id => `<defs><linearGradient id="${id}sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#120a1a"/><stop offset=".6" stop-color="#3a1f48"/><stop offset="1" stop-color="#66397a"/></linearGradient><radialGradient id="${id}h"><stop offset=".3" stop-color="#f8f2e8" stop-opacity=".4"/><stop offset="1" stop-color="#f8f2e8" stop-opacity="0"/></radialGradient>${blur(id+'f',14)}</defs>
+    <rect width="400" height="500" fill="url(#${id}sk)"/>${stars(9,70,340)}<circle cx="200" cy="200" r="170" fill="url(#${id}h)"/><circle cx="200" cy="200" r="78" fill="#f6efe2"/>${[[175,180,14],[228,222,10],[214,168,7],[186,236,8]].map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}" fill="#d8c9ae" opacity=".45"/>`).join('')}
+    <ellipse cx="200" cy="370" rx="320" ry="40" fill="#c4aed3" opacity=".2" filter="url(#${id}f)"/><path d="M0 400C80 360 140 380 210 395C280 410 330 370 400 380V500H0Z" fill="#2b1636"/><path d="M0 440C90 410 170 430 240 440C310 450 350 425 400 430V500H0Z" fill="#1c1024"/>${Array.from({length:22},(_,i)=>lav(10+i*18+(i%3)*4,500,40+(i*37)%30,(i*13)%20-10,i%2?'#4d2a5e':'#3a1f48')).join('')}`,
+  candles: id => `<defs><radialGradient id="${id}bg" cx=".5" cy=".45" r=".8"><stop offset="0" stop-color="#4d2a5e"/><stop offset=".6" stop-color="#1f0f27"/><stop offset="1" stop-color="#0c0612"/></radialGradient>${flameDefs(id)}${blur(id+'b',2.2)}${blur(id+'r',6)}</defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/>${bokeh(id,7,16,'#ffd98a')}<rect y="390" width="400" height="110" fill="#170c1e"/><g opacity=".3" filter="url(#${id}r)"><rect x="112" y="392" width="56" height="60" fill="#fbf5ea" opacity=".4"/><rect x="182" y="392" width="44" height="70" fill="#fbf5ea" opacity=".4"/><rect x="244" y="392" width="50" height="50" fill="#fbf5ea" opacity=".4"/></g>
+    ${candle(id,140,392,150,56)}${candle(id,204,392,220,44)}${candle(id,269,392,110,50)}${rose(88,396,14,'#5c2141','#8a3a63')}${leaf(70,398,.7,-70)}${bloom(320,398,7,'#ddd0e6')}`,
+  tarot: id => { const card = (sym, label) => `<rect x="-56" y="-92" width="112" height="184" rx="9" fill="#2b1636" stroke="#cfb173" stroke-width="1.5"/><rect x="-48" y="-84" width="96" height="168" rx="5" fill="none" stroke="#cfb173" stroke-opacity=".6" stroke-width=".8"/><rect x="-44" y="-80" width="88" height="140" rx="3" fill="#3a1f48"/>${sym}<text y="76" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-size="11" letter-spacing="2.5" fill="#e2cb94">${label}</text>`;
+    const sun = `<g transform="translate(0 -14)" stroke="#e2cb94"><circle r="16" fill="#cfb173" stroke="none"/>${Array.from({length:12},(_,i)=>`<line y1="-22" y2="-32" transform="rotate(${i*30})" stroke-width="1.4"/>`).join('')}</g>`;
+    const moon = `<g transform="translate(0 -14)"><circle r="22" fill="#e2cb94"/><circle cx="9" cy="-5" r="19" fill="#3a1f48"/></g>`;
+    const star = `<path transform="translate(0 -14)" d="M0-28 6-8H27L10 4 17 24 0 12-17 24-10 4-27-8H-6Z" fill="#e2cb94"/>`;
+    return `<defs><radialGradient id="${id}bg" cx=".5" cy=".55" r=".75"><stop offset="0" stop-color="#66397a"/><stop offset=".55" stop-color="#2b1636"/><stop offset="1" stop-color="#120a1a"/></radialGradient>${blur(id+'b',2.2)}${blur(id+'s',8)}</defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/><path d="M0 120C120 160 260 80 400 140" stroke="#7f4e95" stroke-opacity=".15" stroke-width="30" fill="none"/>${bokeh(id,11,10,'#e2cb94',.25)}
+    <g transform="translate(200 270)">${[[-16,-86,14,moon,'THE MOON'],[16,86,14,star,'THE STAR'],[0,0,-10,sun,'THE SUN']].map(([r,x,y,s,l])=>`<g transform="translate(${x} ${y}) rotate(${r})"><rect x="-56" y="-88" width="112" height="184" rx="9" fill="#000" opacity=".5" filter="url(#${id}s)"/>${card(s,l)}</g>`).join('')}</g>
+    <g transform="translate(70 430)"><path d="M0 0 10-26 20 0Z" fill="#a98bbd"/><path d="M18 2 26-14 34 2Z" fill="#7f4e95"/></g>${rose(330,440,13,'#5c2141','#8a3a63')}`; },
+  lavender: id => `<defs><linearGradient id="${id}bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8f2e8"/><stop offset=".6" stop-color="#eee6f2"/><stop offset="1" stop-color="#ddd0e6"/></linearGradient></defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/><g opacity=".3" fill="#fff"><path d="M-40 0H80L260 500H140Z"/><path d="M110 0H150L330 500H290Z"/></g>
+    ${Array.from({length:13},(_,i)=>lav(200,430,250+(i*29)%50,-26+i*4.3,['#c4aed3','#a98bbd','#7f4e95'][i%3])).join('')}
+    ${[-40,-20,20,44].map((a,i)=>`<g transform="rotate(${a} 200 430)"><path d="M200 430V220" stroke="#6b7a50" stroke-width="1.5"/>${Array.from({length:7},(_,j)=>leaf(200,410-j*28,.7,j%2?40:-40,i%2?'#7d8c63':'#94a27a')).join('')}</g>`).join('')}
+    <rect x="186" y="380" width="28" height="14" rx="3" fill="#b8965a"/>${bloom(150,300,9,'#fdfaf4')}${bloom(244,250,8,'#fdfaf4')}${rose(226,340,14,'#d9b8c8','#f1dbe5')}`,
+  circle: id => { const pts = Array.from({length:12},(_,i)=>{const a=i/12*Math.PI*2;return {x:200+Math.cos(a)*150,y:320+Math.sin(a)*58,d:(Math.sin(a)+1)/2};}).sort((p,q)=>p.y-q.y);
+    return `<defs><radialGradient id="${id}bg" cx=".5" cy=".55" r=".8"><stop offset="0" stop-color="#4d2a5e"/><stop offset=".6" stop-color="#1f0f27"/><stop offset="1" stop-color="#0c0612"/></radialGradient>${flameDefs(id)}</defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/>${stars(21,30,160)}<ellipse cx="200" cy="320" rx="150" ry="58" fill="none" stroke="#cfb173" stroke-opacity=".35"/>
+    <g transform="translate(200 320) scale(1 .4)">${Array.from({length:10},(_,i)=>`<ellipse cy="-34" rx="12" ry="30" fill="${i%2?'#a98bbd':'#c4aed3'}" opacity=".8" transform="rotate(${i*36})"/>`).join('')}<circle r="16" fill="#e2cb94"/></g>
+    ${pts.map(p=>candle(id,+p.x.toFixed(1),+p.y.toFixed(1),36+p.d*22,12+p.d*8)).join('')}`; },
+  stashhat: id => `<defs><radialGradient id="${id}bg" cx=".5" cy=".4" r=".8"><stop offset="0" stop-color="#fdfaf4"/><stop offset=".6" stop-color="#eee6f2"/><stop offset="1" stop-color="#c4aed3"/></radialGradient></defs>
+    <rect width="400" height="500" fill="url(#${id}bg)"/><path d="M0 360C120 340 280 340 400 360V500H0Z" fill="#efe6d6" opacity=".7"/><g transform="translate(200 370) scale(1.05)">${hat(id+'h',true)}<g transform="translate(14 -120)"><circle r="9" fill="#2b1636" stroke="#cfb173" stroke-width="1.5"/><circle r="3" fill="#e2cb94"/></g></g>`,
+};
+const NECK = { spiral: ['#9e2a2b','#2c4f8a','#e9e2d0','#f8f2e8','#e3d6c0','#f1f1ef','#8e8f95'], fish: ['#1e2f4d','#3f6f78','#c9d1d6','#f3f1ee','#d6d3d9','#fafafa','#8b9096'], thorn: ['#5c1a2b','#82283e','#2b1636','#f5ede8','#ddc9c9','#d9d4d0','#5e5a58'], leaf: ['#6b4226','#5f6b3a','#b8763f','#f8f2e8','#e3d2b8','#f2b27a','#8a4b22'] };
+const SPIRAL = (() => { const p = []; for (let i = 0; i <= 120; i++) { const t = i / 120 * Math.PI * 6, r = 1 + t * 1.05; p.push(`${(Math.cos(t)*r).toFixed(2)} ${(Math.sin(t)*r).toFixed(2)}`); } return 'M' + p.join(' L'); })();
+for (const v of Object.keys(NECK)) SCENES['neck-' + v] = id => { const [a,b,c,b1,b2,m1,m2] = NECK[v]; const cord = 'M60 -10C60 180 120 320 200 330C280 320 340 180 340 -10'; const met = `url(#${id}m)`;
+  const pend = { spiral: `<g transform="translate(0 30)"><circle r="27" fill="${met}"/><circle r="23.5" fill="none" stroke="#6d6e74" stroke-opacity=".5"/><path d="${SPIRAL}" fill="none" stroke="#5d5e64" stroke-width="2" stroke-linecap="round"/></g>`,
+    fish: `<g transform="translate(0 30) rotate(90)"><path d="M-34 0C-20-20 14-22 30 0C14 22-20 20-34 0Z" fill="${met}"/><path d="M28 0 48-16 44 0 48 16Z" fill="${met}"/><circle cx="-20" cy="-4" r="2.4" fill="#2b2f36"/>${[-6,4,14].map(x=>`<path d="M${x}-12C${x+6}-4 ${x+6} 4 ${x} 12" stroke="#6d737b" fill="none"/>`).join('')}</g>`,
+    thorn: `<g transform="translate(0 4)"><path d="M0 0C-6 20-4 44 6 66C2 44 4 20 8 0Z" fill="${met}"/><path d="M-2 18-18 10-3 26ZM5 36 22 28 6 44ZM-1 52-14 50 1 58Z" fill="${met}"/></g>`,
+    leaf: `<g transform="translate(0 2)"><path d="M0 0C30 18 34 54 0 82C-34 54-30 18 0 0Z" fill="${met}"/><path d="M0 4V78" stroke="#6b3a1a" stroke-width="1.4"/>${[20,34,48,62].map(y=>`<path d="M0 ${y}C8 ${y-4} 14 ${y-10} 18 ${y-16}M0 ${y}C-8 ${y-4}-14 ${y-10}-18 ${y-16}" stroke="#6b3a1a" fill="none"/>`).join('')}</g>` }[v];
+  return `<defs><radialGradient id="${id}bg" cx=".45" cy=".4" r=".85"><stop offset="0" stop-color="${b1}"/><stop offset="1" stop-color="${b2}"/></radialGradient><linearGradient id="${id}m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${m1}"/><stop offset="1" stop-color="${m2}"/></linearGradient>${blur(id+'s',4)}</defs>
+  <rect width="400" height="500" fill="url(#${id}bg)"/><path d="M0 420C100 400 220 450 400 410V500H0Z" fill="#fff" opacity=".35"/>
+  <path d="${cord}" transform="translate(5 8)" stroke="#2b1636" stroke-opacity=".22" stroke-width="12" fill="none" filter="url(#${id}s)"/><path d="${cord}" stroke="${a}" stroke-width="11" fill="none"/><path d="${cord}" stroke="${b}" stroke-width="11" fill="none" stroke-dasharray="5 5"/><path d="${cord}" stroke="${c}" stroke-width="3" fill="none" stroke-dasharray="2 8" opacity=".8"/>
+  <circle cx="200" cy="331" r="7" fill="${met}"/><g transform="translate(200 338) scale(1.35)">${pend}</g>${bloom(64,440,8,'#fdfaf4','#cfb173')}${leaf(350,460,.9,-30,'#94a27a')}`; };
+const scene = (name, align = 'xMidYMid') => { const id = 's' + (++SID); return `<svg viewBox="0 0 400 500" preserveAspectRatio="${align} slice" aria-hidden="true">${SCENES[name](id)}</svg>`; };
+
+/* ================= demonstration content ================= */
+const AFF = [
+  ['Becoming', 'I give myself permission to grow, release, and become.'], ['Softness', 'My softness is not weakness. It is where my magic lives.'],
+  ['Trust', 'I trust the timing of my life, even the parts I cannot see yet.'], ['Worthiness', 'I am allowed to take up space, exactly as I am today.'],
+  ['Release', 'Every ending I honour makes room for something beautiful.'], ['Light', 'I carry my own light, and I share it without dimming it.'], ['Self-love', 'I return to myself with kindness, again and again.'] ];
+const PROMPTS = ['What is one thing you are ready to let go of today?', 'What part of yourself deserves more love and attention today?', 'Where did you feel most like yourself this week?', 'What small ritual brings you back to calm?', 'What are you quietly proud of that no one else knows about?', 'Which season of your life are you in right now, and what does it ask of you?', 'What would you tell the version of you from one year ago?'];
+const NOTES = ["You don't have to have it all figured out to move forward. Light a candle, take a breath, and take the next small step. That is magic too.", 'Rest is part of the spell. Give yourself the same patience you would give a seed in the dark soil.', 'Notice what made you smile today and hold onto it a little longer than usual.', 'Some days the magic is loud. Most days it is quiet: a cup of tea, a kind word, a deep breath.', 'What you release today is not lost. It becomes room for what is meant for you.', 'Your intuition has been speaking softly. Today, make a little space to listen.', 'Celebrate how far you have come, not only how far you have to go.'];
+const DAY_SCENES = ['hat', 'moon', 'candles', 'lavender', 'tarot', 'moon', 'candles'];
+const DAY = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 864e5);
+const MEMBERS = { m1: ['Rowan M.', 'rowan.reads.runes', 280], m2: ['Celeste A.', 'celestial.celeste', 320], m3: ['Juniper K.', 'juniper.and.sage', 140], m4: ['Marisol V.', 'marisol.moonlit', 30], m5: ['Imogen T.', 'imogen.in.bloom', 210] };
+const POSTS = [
+  { id: 'p1', m: 'm2', topic: 'Gratitude', q: 'What are you grateful for today?', body: 'My little sister called just to say she missed me. I have been carrying that warm feeling around all afternoon. Grateful for the people who reach out first.', ago: '2h', likes: 214, c: [['m4', 'This made me want to call my sister right now. 💜'], ['m1', 'Those calls are the real magic.']] },
+  { id: 'p2', m: 'm1', topic: 'Releasing', q: "What is one thing you're working on releasing?", body: "The need to reply to every message instantly. I'm practicing letting my phone sit face down during my evening tea. Day four and I feel lighter already.", ago: '4h', likes: 187, c: [['m5', 'Face-down phone club! It changed my evenings.']] },
+  { id: 'p3', m: 'm3', topic: 'Beautiful moments', q: 'Share something beautiful that happened this week.', body: 'The lavender I planted in spring finally bloomed by the kitchen window. I hung a small bundle to dry over the doorway. The whole house smells like a dream.', ago: '6h', likes: 342, art: 'lavender', c: [['m2', 'Dried lavender over the door is such a lovely ritual.']] },
+  { id: 'p4', m: 'm4', topic: 'Intentions', q: 'What energy are you bringing into today?', body: "Courage. I have a hard conversation at work this afternoon and I'm wearing my favourite necklace as a reminder that I can be kind and clear at the same time.", ago: '9h', likes: 129, c: [['m3', 'Sending you all the courage.']] },
+  { id: 'p5', m: 'm5', topic: 'Gratitude', q: 'What are you grateful for today?', body: 'Pulled the Star card this morning right after a rough week. Taking it as a sign to keep going. Grateful for a space where I can say that out loud. 🌙', ago: '1d', likes: 256, art: 'tarot', c: [] } ];
+const EVENTS = [
+  { id: 'e1', t: 'Full Moon Release Circle', when: 'Sample date · Thursday evening', time: '7:00 PM your time', where: 'Virtual gathering', v: true, art: 'moon', d: 'Gather online under the full moon for a guided release ritual, a few quiet minutes of journaling, and a group intention to close.', x: ['Guided release meditation', 'Journaling prompts to keep', 'Bring a candle and paper'] },
+  { id: 'e2', t: 'Candles & Intentions Evening', when: 'Sample date · Saturday', time: '6:30 PM', where: 'In person · sample city studio', v: false, art: 'candles', d: 'An intimate evening of candle dressing, intention setting, and meeting fellow coven members over tea.', x: ['All materials provided', 'Light refreshments', 'Small group of 20'] },
+  { id: 'e3', t: 'Tarot for Beginners Workshop', when: 'Sample date · Sunday afternoon', time: '2:00 PM your time', where: 'Virtual workshop', v: true, art: 'tarot', d: 'Learn to read for yourself: card meanings, simple spreads, and how to trust your own interpretation.', x: ['Beginner friendly', 'Printable spread guide', 'Live Q&A'] } ];
+const PRODUCTS = [
+  { id: 'hat', n: 'The Magnetic Stash Hat', p: 59, art: 'stashhat', d: 'A soft, structured purple witch hat with a little secret: a magnetic stash pocket tucked into the crown for the small things you want to keep close.', x: ['Signature deep purple', 'Hidden magnetic pocket', 'Brim that holds its shape'] },
+  { id: 'spiral', n: 'Red & Blue Spiral Kumihimo Necklace', p: 110, art: 'neck-spiral', d: 'Red and blue threads braided in the kumihimo style frame a spiral pendant, a reminder that growth moves in circles.', x: ['Hand-braided cord', 'Spiral pendant', 'Red and blue palette'] },
+  { id: 'fish', n: 'Silver Fish Kumihimo Necklace', p: 149, art: 'neck-fish', d: 'A silver fish pendant on a deep-toned braided cord. For going with the flow and trusting the current.', x: ['Hand-braided cord', 'Silver-tone fish pendant', 'Deep ocean tones'] },
+  { id: 'thorn', n: 'Burgundy Thorn Kumihimo Necklace', p: 149, art: 'neck-thorn', d: 'Rich burgundy braiding and a delicate thorn pendant: soft and strong at the same time.', x: ['Hand-braided cord', 'Thorn pendant', 'Burgundy and wine tones'] },
+  { id: 'leaf', n: 'Copper Leaf Kumihimo Necklace', p: 129, art: 'neck-leaf', d: 'Earthy braiding finished with a warm copper leaf. For grounding, gratitude and every season of change.', x: ['Hand-braided cord', 'Copper-tone leaf pendant', 'Earthy autumn palette'] } ];
+const VIDEOS = [
+  { id: 'v1', k: 'Video', t: 'A little magic for your Monday', len: '2:14', art: 'candles', lines: ['Good morning, witches. Grab your tea, whatever feels good.', 'This week, before you reach for your phone, put a hand on your heart and say one kind thing to yourself.', "That's the spell. Let's see what it opens up for you."] },
+  { id: 'v2', k: 'Ritual', t: 'A five-minute full moon release', len: '5:02', art: 'moon', lines: ['Find a quiet corner and something to write with.', "Write down one thing you're ready to release, then read it aloud, slowly.", 'Fold the paper and set it aside. Naming it is the first step.'] },
+  { id: 'v3', k: 'Guide', t: 'Pulling a card for the day', len: '3:40', art: 'tarot', lines: ['Shuffle while you think about your day, just today.', 'Pull one card and notice your first feeling before you look anything up.', 'Write that feeling down. Your notes become your own guidebook.'] } ];
+const RELEASE = ['Self-doubt', 'Fear', 'Resentment', 'Negative habits', 'Old expectations', 'Something else'];
+const ENERGY = ['Calm', 'Courage', 'Joy', 'Softness', 'Focus', 'Abundance', 'Gratitude'];
+const $$ = n => '$' + n.toLocaleString('en-US');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const today = () => ({ a: AFF[DAY % 7], q: PROMPTS[DAY % 7], note: NOTES[DAY % 7], art: DAY_SCENES[DAY % 7] });
+
+/* ================= state (this browser only) ================= */
+const KEY = 'agw-proto-v1';
+const DEF = { name: '', hue: 285, savedA: [], favA: [], savedMsg: false, favV: [], journal: [], liked: [], posts: [], replies: {}, interests: [], rsvps: {}, readings: [], cart: {}, coven: false };
+let S = JSON.parse(JSON.stringify(DEF));
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
+const tog = (arr, v) => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
+const bagCount = () => Object.values(S.cart).reduce((a, b) => a + b, 0);
+const ago = ts => { const m = Math.floor((Date.now() - ts) / 6e4); return m < 1 ? 'just now' : m < 60 ? m + 'm' : m < 1440 ? Math.floor(m / 60) + 'h' : new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); };
+const avatar = (hue, letter, size = 36) => `<span class="avatar" style="width:${size}px;height:${size}px;font-size:${size*.45}px;background:radial-gradient(circle at 30% 25%,hsl(${hue} 35% 62%),hsl(${hue} 38% 30%))">${esc(letter)}</span>`;
+const me = (size) => avatar(S.hue, (S.name || 'W')[0].toUpperCase(), size);
+
+/* ================= UI helpers ================= */
+const view = document.getElementById('view');
+const sheetWrap = document.getElementById('sheetWrap'), sheet = document.getElementById('sheet');
+let ui = { dailyTab: 'affirmation', affOff: 0, promptShift: 0, topic: 'All', release: null, energy: 'Calm', profTab: 'saved', qty: 1, shopFilter: 'All' };
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.getElementById('screen').appendChild(t); setTimeout(() => t.remove(), 2600); }
+function openSheet(html, dark) { sheet.className = 'sheet' + (dark ? ' dk' : ''); sheet.innerHTML = `<button class="x" data-act="close" aria-label="Close">${ic('x','sm')}</button>` + html; sheetWrap.hidden = false; sheet.scrollTop = 0; const f = sheet.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60); }
+function closeSheet() { sheetWrap.hidden = true; sheet.innerHTML = ''; clearInterval(playTimer); }
+async function share(text) { const payload = text + '\n\n— from the A Good Witch app concept'; try { await navigator.clipboard.writeText(payload); toast('Copied, ready to share'); } catch (e) { toast('Sharing opens the share sheet in the real app'); } }
+
+/* ================= screens ================= */
+const ROUTES = { welcome: 'Welcome', home: 'Home', daily: 'Daily Magic', coven: 'The Good Coven', readings: 'Tarot Readings', book: 'Book a Reading', events: 'Events', shop: 'Shop', product: 'Product Detail', bag: 'Shopping Bag', membership: 'Membership', profile: 'Profile & Saved' };
+const TABS = [['home', 'Home', 'home'], ['daily', 'Daily Magic', 'spark'], ['coven', 'The Coven', 'users'], ['readings', 'Readings', 'moon'], ['shop', 'Shop', 'store']];
+let currentProduct = 'hat';
+
+const screens = {
+  home() {
+    const t = today(), feat = VIDEOS[DAY % 3];
+    const explore = [['daily', 'Daily Magic', 'Affirmations & rituals', 'candles'], ['coven', 'The Good Coven', 'Share & connect', 'circle'], ['readings', 'Tarot Readings', 'Private 1:1 guidance', 'tarot'], ['events', 'Upcoming Events', 'Circles & gatherings', 'moon'], ['shop', 'Shop the Collection', 'Hats & necklaces', 'stashhat']];
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">A Good Witch</p><h1 class="display h1">Welcome back, witch.</h1><p class="sub">${S.name ? esc(S.name) + ', your' : 'Your'} daily dose of magic is waiting.</p></section>
+    <section class="pad" style="margin-top:20px"><article class="dark">
+      <div class="art fade-b" style="height:250px">${scene(t.art)}<span class="tag dk" style="position:absolute;top:14px;left:14px;z-index:2">Today's Magic</span></div>
+      <div style="padding:0 20px 22px;margin-top:-50px;position:relative">
+        <p class="eyebrow">Affirmation · ${t.a[0]}</p>
+        <p class="display" style="font-size:1.9rem;margin-top:8px">“${t.a[1]}”</p>
+        <div class="orn">◆</div>
+        <p class="eyebrow" style="color:var(--lav-2)">Reflection prompt</p><p style="font-family:var(--serif);font-style:italic;font-size:1.2rem;margin:6px 0 14px;color:var(--lav-4)">${t.q}</p>
+        <p class="eyebrow" style="color:var(--lav-2)">A note for today</p><p style="font-size:.9rem;line-height:1.6;margin:6px 0 0;color:rgba(238,230,242,.82)">${t.note}</p>
+        <div class="row" style="margin-top:20px"><button class="btn sm ${S.savedMsg ? 'b-gold' : 'b-ivory'}" data-act="saveMsg">${ic('mark','sm',S.savedMsg)} ${S.savedMsg ? 'Saved' : 'Save this message'}</button><button class="btn sm b-lineL" data-act="shareToday">${ic('share','sm')} Share</button><button class="btn sm b-lineL" data-act="reflect">${ic('feather','sm')} Reflect</button></div>
+        <p style="font-size:.62rem;color:rgba(221,208,230,.5);margin:14px 0 0">Sample daily content written for this concept.</p>
+      </div></article></section>
+    <section class="sec"><div class="sec-h pad"><div><p class="eyebrow">Everything in one place</p><h2 class="display">Explore your coven</h2></div></div>
+      <div class="hscroll">${explore.map(([r, t2, s, a]) => `<button class="tile" data-go="${r}"><div class="art fade-n">${scene(a)}</div><div class="cap"><b>${t2}</b><small>${s}</small></div></button>`).join('')}</div></section>
+    <section class="sec pad"><div class="sec-h"><div><p class="eyebrow">Exclusive inside the app</p><h2 class="display">From Shelley</h2></div><span class="tag">Demonstration</span></div>
+      <button class="dark" style="display:block;width:100%;text-align:left" data-act="video" data-id="${feat.id}"><div class="art fade-n" style="aspect-ratio:4/3">${scene(feat.art)}
+        <span style="position:absolute;z-index:2;top:50%;left:50%;transform:translate(-50%,-50%);width:58px;height:58px;border-radius:50%;background:rgba(253,250,244,.18);border:1px solid rgba(253,250,244,.45);display:flex;align-items:center;justify-content:center;color:var(--ivory-2)">${ic('play')}</span>
+        <div style="position:absolute;z-index:2;inset:auto 0 0;padding:16px"><p class="eyebrow">Today's video · ${feat.len}</p><p class="display" style="font-size:1.5rem;margin-top:4px">${feat.t}</p></div></div></button>
+      <div class="list" style="margin-top:10px">${VIDEOS.filter(v => v.id !== feat.id).map(v => `<button class="card" style="display:flex;gap:12px;align-items:center;padding:10px;text-align:left" data-act="video" data-id="${v.id}"><div class="art" style="width:62px;height:62px;border-radius:12px;flex-shrink:0">${scene(v.art)}</div><div><p class="eyebrow">${v.k} · ${v.len}</p><p class="display" style="font-size:1.1rem;color:var(--plum);margin-top:3px">${v.t}</p></div>${S.favV.includes(v.id) ? `<span style="margin-left:auto;color:var(--plum-4)">${ic('heart','sm',true)}</span>` : ''}</button>`).join('')}</div></section>
+    <section class="sec pad"><button class="dark" style="display:block;width:100%;text-align:left;padding:24px" data-go="membership"><p class="eyebrow">Proposed experience</p><p class="display" style="font-size:1.75rem;margin-top:8px">Your people. Your space. Your coven.</p><p style="font-size:.85rem;color:rgba(238,230,242,.75);margin:8px 0 14px">See how The Good Coven membership could come to life.</p><span class="eyebrow" style="display:inline-flex;gap:6px;align-items:center">Explore the Coven ${ic('arrow','sm')}</span></button></section>`;
+  },
+
+  daily() {
+    const tabs = [['affirmation', 'Affirmation', 'sun'], ['reflection', 'Reflection', 'feather'], ['release', 'Letting Go', 'wind'], ['intention', 'Intention', 'flame']];
+    let body = '';
+    if (ui.dailyTab === 'affirmation') {
+      const i = ((DAY - ui.affOff) % 7 + 7) % 7, a = AFF[i], id = 'a' + i, sv = S.savedA.includes(id), fv = S.favA.includes(id);
+      const label = ui.affOff === 0 ? 'Today' : ui.affOff === 1 ? 'Yesterday' : ui.affOff + ' days ago';
+      body = `<article class="dark" style="min-height:380px;display:flex;flex-direction:column"><div class="art" style="position:absolute;inset:0;opacity:.6">${scene(['moon','candles','hat','tarot'][i%4])}</div><div style="position:absolute;inset:0;background:linear-gradient(rgba(31,15,39,.7),rgba(31,15,39,.95))"></div>
+        <div style="position:relative;padding:22px;display:flex;flex-direction:column;flex:1"><div style="display:flex;justify-content:space-between"><p class="eyebrow">${label}</p><p class="eyebrow" style="color:var(--lav-2)">${a[0]}</p></div>
+        <div style="margin:auto 0;padding:30px 0;text-align:center"><div class="orn" style="width:90px;margin:0 auto 18px">◆</div><p class="display" style="font-size:2rem;line-height:1.15">${a[1]}</p><div class="orn" style="width:90px;margin:18px auto 0">◆</div></div>
+        <div style="display:flex;justify-content:space-between;align-items:center"><button class="round" data-act="affPrev" aria-label="Earlier affirmation">${ic('left','sm')}</button><div class="row"><button class="round ${sv ? 'on' : ''}" data-act="saveA" data-id="${id}" aria-label="Save">${ic('mark','sm',sv)}</button><button class="round ${fv ? 'on' : ''}" data-act="favA" data-id="${id}" aria-label="Favourite">${ic('heart','sm',fv)}</button><button class="round" data-act="shareA" data-id="${i}" aria-label="Share">${ic('share','sm')}</button></div><button class="round" data-act="affNext" aria-label="Later affirmation" ${ui.affOff === 0 ? 'disabled style="opacity:.3"' : ''}>${ic('right','sm')}</button></div></div></article>
+        <h3 class="display" style="font-size:1.4rem;color:var(--plum);margin:24px 0 10px">Previous affirmations</h3>
+        <div class="list">${[0,1,2,3,4,5,6].map(o => { const k = ((DAY - o) % 7 + 7) % 7; return `<button class="card" style="display:flex;gap:12px;padding:12px 14px;text-align:left;${o === ui.affOff ? 'background:var(--lav-4);border-color:rgba(77,42,94,.35)' : ''}" data-act="affPick" data-o="${o}"><span class="eyebrow" style="width:72px;flex-shrink:0;padding-top:3px">${o === 0 ? 'Today' : o === 1 ? 'Yesterday' : o + ' days ago'}</span><span style="font-family:var(--serif);font-size:1.02rem;color:var(--plum);line-height:1.3;flex:1">${AFF[k][1]}</span>${S.favA.includes('a'+k) ? `<span style="color:var(--plum-4)">${ic('heart','sm',true)}</span>` : ''}</button>`; }).join('')}</div>`;
+    } else if (ui.dailyTab === 'reflection') {
+      const q = PROMPTS[(DAY + ui.promptShift) % 7];
+      body = `<section class="card" style="overflow:hidden"><div class="art" style="height:130px">${scene('lavender')}</div><div style="padding:18px 18px 20px">
+        <p class="eyebrow">${ui.promptShift ? 'Another prompt' : "Today's reflection"}</p><h2 class="display" style="font-size:1.7rem;color:var(--plum);margin-top:6px">${q}</h2>
+        <button style="display:inline-flex;gap:6px;align-items:center;margin-top:10px;font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--plum-4)" data-act="newPrompt">${ic('refresh','sm')} Try a different prompt</button>
+        <form class="stack" style="margin-top:16px" data-form="reflection" data-q="${esc(q)}"><label class="lb"><span>Your private response</span><textarea class="field" id="r-text" placeholder="Take your time…"></textarea></label><p class="hint" style="margin-top:-8px">Stays on this device only.</p><button class="btn b-plum full">Save reflection</button></form></div></section>
+        <h3 class="display" style="font-size:1.4rem;color:var(--plum);margin:24px 0 10px">Your journal</h3>${journalList('reflection', 'Your saved reflections appear here, private to you.')}`;
+    } else if (ui.dailyTab === 'release') {
+      body = `<section class="dark"><div class="art" style="position:absolute;inset:0;opacity:.45">${scene('moon','xMidYMax')}</div><div style="position:absolute;inset:0;background:linear-gradient(rgba(31,15,39,.8),rgba(31,15,39,.96))"></div><div style="position:relative;padding:22px" id="releaseBox">
+        <p class="eyebrow">A letting-go ritual</p><h2 class="display" style="font-size:1.9rem;margin-top:6px">What are you ready to release?</h2><p style="font-size:.85rem;color:rgba(238,230,242,.75);line-height:1.55">Choose what feels heavy today. Name it, write it, then let it go.</p>
+        <div class="row" style="margin-top:14px">${RELEASE.map(c => `<button class="chip ${ui.release === c ? 'on' : ''}" data-act="relCat" data-c="${c}">${c}</button>`).join('')}</div>
+        ${ui.release ? `<form class="stack" style="margin-top:16px" data-form="release"><textarea class="field" id="rel-text" placeholder="Write what ${ui.release.toLowerCase()} has been asking of you…"></textarea><label style="display:flex;gap:10px;align-items:center;font-size:.85rem;color:rgba(238,230,242,.8)"><input type="checkbox" id="rel-keep" checked style="accent-color:#cfb173;width:16px;height:16px"> Keep a private copy in my journal</label><button class="btn b-gold full">${ic('wind','sm')} Release it</button></form>` : ''}
+        </div></section><h3 class="display" style="font-size:1.4rem;color:var(--plum);margin:24px 0 10px">What you've released</h3>${journalList('release', 'Anything you keep after a release is stored here, privately.')}`;
+    } else {
+      const t = S.journal.find(e => e.kind === 'intention' && new Date(e.ts).toDateString() === new Date().toDateString());
+      body = `<section class="card" style="overflow:hidden"><div class="art" style="height:140px">${scene('candles')}</div><div style="padding:18px 18px 20px">
+        <p class="eyebrow">Set your intention</p><h2 class="display" style="font-size:1.8rem;color:var(--plum);margin-top:6px">What energy are you bringing into today?</h2>
+        ${t ? `<div style="margin-top:14px;border:1px solid rgba(207,177,115,.5);border-radius:16px;padding:14px;background:linear-gradient(135deg,var(--lav-4),var(--ivory-2))"><p class="eyebrow">Today's intention · ${esc(t.tag)}</p><p class="display" style="font-size:1.4rem;color:var(--plum);margin-top:4px">“${esc(t.text)}”</p></div>` : ''}
+        <p class="eyebrow" style="margin:16px 0 8px;color:var(--muted)">Choose an energy</p><div class="row">${ENERGY.map(e => `<button class="chip ${ui.energy === e ? 'on' : ''}" data-act="energy" data-e="${e}">${e}</button>`).join('')}</div>
+        <form class="stack" style="margin-top:16px" data-form="intention"><label class="lb"><span>My intention</span><input class="field" id="int-text" maxlength="160" placeholder="Today I choose ${ui.energy.toLowerCase()} by…"></label><button class="btn b-plum full">${t ? 'Set a new intention' : 'Set my intention'}</button></form></div></section>
+        <h3 class="display" style="font-size:1.4rem;color:var(--plum);margin:24px 0 10px">Past intentions</h3>${journalList('intention', 'Each intention you set is kept here.')}`;
+    }
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">A ritual for every day</p><h1 class="display h1">Your Daily Magic</h1><p class="sub">Four small practices to pause, reflect and choose how you want to feel.</p></section>
+      <div class="pad" style="margin-top:16px;position:sticky;top:0;z-index:3;padding-block:6px;background:rgba(248,242,232,.94)"><div class="seg">${tabs.map(([k, l, i]) => `<button class="${ui.dailyTab === k ? 'on' : ''}" data-act="dtab" data-t="${k}">${ic(i,'sm')}${l}</button>`).join('')}</div></div>
+      <div class="pad" style="margin-top:14px">${body}</div>
+      <p class="note">These practices are for inspiration and personal reflection. They are not medical or mental health treatment.</p>`;
+  },
+
+  coven() {
+    const topics = ['All', 'Gratitude', 'Releasing', 'Beautiful moments', 'Intentions'];
+    const list = POSTS.filter(p => ui.topic === 'All' || p.topic === ui.topic);
+    const mine = S.posts.filter(p => ui.topic === 'All' || p.topic === ui.topic);
+    return `<section class="pad" style="padding-top:16px"><div class="dark" style="min-height:330px;display:flex;flex-direction:column;justify-content:flex-end"><div class="art fade-n" style="position:absolute;inset:0">${scene('circle')}</div>
+      <div style="position:relative;z-index:2;padding:22px"><p class="eyebrow">The Good Coven · Community</p><h1 class="display" style="font-size:2.2rem;margin-top:8px">Welcome to the Good Coven.</h1><p style="font-size:.9rem;color:rgba(238,230,242,.8);line-height:1.55">A place to connect, share, grow, and celebrate the magic in everyday life.</p>
+      <div class="stack" style="gap:8px;margin-top:14px"><button class="btn b-gold full" data-act="compose">Join the Conversation</button><button class="btn b-lineL full" data-act="toFeed">Explore Community</button></div>
+      <p style="font-size:.6rem;color:rgba(221,208,230,.55);margin:12px 0 0">Simulated community. Members and posts are fictional; what you share stays on this device.</p></div></div></section>
+    <section class="pad sec"><div class="card" style="padding:18px"><p class="eyebrow">Daily discussion</p><h2 class="display" style="font-size:1.6rem;color:var(--plum);margin-top:6px">What is one small ritual that brings you back to yourself?</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:14px"><div style="display:flex;align-items:center;gap:8px"><span style="display:flex">${['m1','m2','m3','m4'].map((m, i) => `<span style="margin-left:${i ? -8 : 0}px">${avatar(MEMBERS[m][2], MEMBERS[m][0][0], 26)}</span>`).join('')}</span><small style="font-size:.68rem;color:var(--muted)">1,284 sample replies</small></div><button class="btn sm b-plum" data-act="compose">${ic('pen','sm')} Share</button></div></div></section>
+    <section class="sec" id="feed"><div class="sec-h pad"><div><p class="eyebrow">Community feed</p><h2 class="display">From the coven</h2></div><span class="tag">Fictional members</span></div>
+      <div class="hscroll" style="margin-bottom:12px">${topics.map(t => `<button class="chip ${ui.topic === t ? 'on' : ''}" data-act="topic" data-t="${t}">${t}</button>`).join('')}</div>
+      <div class="pad list">
+        <button class="card" style="display:flex;gap:10px;align-items:center;padding:10px 12px;text-align:left" data-act="compose">${me(34)}<span style="flex:1;font-size:.85rem;color:#8b7a95">Share something with the coven…</span><span class="btn sm b-plum">Post</span></button>
+        ${mine.map(p => `<article class="card post" style="border-color:rgba(207,177,115,.6)"><div class="who">${me(38)}<div><b>${esc(S.name || 'You')}</b><small>Visible only on this device · ${ago(p.ts)}</small></div><button class="topic" data-act="delPost" data-id="${p.id}">Remove</button></div><p class="prompt">${esc(p.q)}</p><p class="body">${esc(p.body)}</p></article>`).join('')}
+        ${list.map(p => { const m = MEMBERS[p.m], on = S.liked.includes(p.id), n = p.c.length + (S.replies[p.id] || []).length; return `<article class="card post"><div class="who">${avatar(m[2], m[0][0], 38)}<div><b>${m[0]}</b><small>@${m[1]} · ${p.ago}</small></div><span class="topic">${p.topic}</span></div><p class="prompt">${p.q}</p><p class="body">${p.body}</p>${p.art ? `<div class="art" style="height:170px;border-radius:14px;margin-top:12px">${scene(p.art)}</div>` : ''}<div class="acts"><button class="${on ? 'on' : ''}" data-act="like" data-id="${p.id}" aria-label="Like">${ic('heart','sm',on)} ${p.likes + (on ? 1 : 0)}</button><button data-act="comments" data-id="${p.id}" aria-label="Replies">${ic('chat','sm')} ${n}</button><button style="margin-left:auto" data-act="sharePost" data-id="${p.id}">${ic('share','sm')} Share</button></div></article>`; }).join('')}
+        ${!list.length && !mine.length ? '<div class="empty"><b>Quiet in this circle</b><p>Be the first to share.</p></div>' : ''}
+      </div></section>
+    <section class="pad sec"><div class="dark"><div class="art" style="height:100px">${scene('lavender')}</div><div style="padding:0 20px 20px;margin-top:-28px;position:relative">${avatar(140, 'J', 56)}<p class="eyebrow" style="margin-top:10px;display:flex;gap:6px;align-items:center">${ic('star','sm',true)} Member spotlight</p><p class="display" style="font-size:1.5rem;margin-top:4px">Juniper K.</p><p style="font-size:.7rem;color:rgba(221,208,230,.6);margin:2px 0 0">@juniper.and.sage · Asheville, NC</p><p style="font-family:var(--serif);font-style:italic;font-size:1.08rem;line-height:1.4;color:var(--lav-4)">“I joined to learn tarot and stayed for the people. This coven taught me that being gentle with myself is a practice.”</p><p style="font-size:.6rem;letter-spacing:.16em;text-transform:uppercase;color:rgba(221,208,230,.4);margin:0">Fictional member</p></div></div></section>
+    <section class="pad sec"><div class="card" style="padding:18px"><p class="eyebrow">Announcements from Shelley</p>
+      <div style="border-left:2px solid rgba(207,177,115,.7);padding-left:12px;margin-top:12px"><small style="font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:#9a8aa4">Sample · this week</small><p class="display" style="font-size:1.15rem;color:var(--plum)">A new daily message every morning</p><p style="font-size:.82rem;color:var(--muted);margin:4px 0 0;line-height:1.5">A short message from Shelley will be waiting on your Home screen each morning.</p></div>
+      <div style="border-left:2px solid rgba(207,177,115,.7);padding-left:12px;margin-top:14px"><small style="font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:#9a8aa4">Sample · 2 days ago</small><p class="display" style="font-size:1.15rem;color:var(--plum)">Full moon circle sign-ups are open</p><p style="font-size:.82rem;color:var(--muted);margin:4px 0 0;line-height:1.5">Save your spot in the virtual release circle from Events.</p></div></div></section>
+    <section class="pad sec"><div class="card" style="padding:18px"><p class="eyebrow">Upcoming gatherings</p><div class="list" style="margin-top:12px">${EVENTS.map(e => `<button style="display:flex;gap:12px;align-items:center;text-align:left" data-go="events"><span class="art" style="width:52px;height:52px;border-radius:12px;flex-shrink:0">${scene(e.art)}</span><span style="flex:1;min-width:0"><b style="display:block;font-family:var(--serif);font-weight:500;font-size:1.08rem;color:var(--plum)">${e.t}</b><small style="font-size:.7rem;color:var(--muted)">${e.where}</small></span>${ic('right','sm')}</button>`).join('')}</div><button class="btn sm b-line full" style="margin-top:14px" data-go="events">See all events</button></div></section>`;
+  },
+
+  readings() {
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">Tarot readings</p><h1 class="display h1">Find your guidance.</h1><p class="sub">Explore the reading experiences available through A Good Witch.</p></section>
+    <section class="pad" style="margin-top:18px"><article class="dark"><div class="art fade-b" style="height:270px">${scene('tarot')}<span class="tag dk" style="position:absolute;top:14px;left:14px;z-index:2">Featured</span></div>
+      <div style="padding:0 20px 22px;margin-top:-30px;position:relative"><p class="eyebrow">One-on-one</p><h2 class="display" style="font-size:2.2rem;margin-top:6px">Private 1:1 Tarot Reading</h2><p class="display" style="font-size:2rem;color:var(--gold-2);margin-top:6px">$149</p>
+      <p style="font-size:.9rem;line-height:1.6;color:rgba(238,230,242,.8)">A personal reading experience designed to give you space to explore your questions, reflect, and gain perspective.</p>
+      <div class="list" style="gap:8px;margin:14px 0 20px">${['One-on-one time focused on you', 'Space to bring the questions on your heart', 'Reflection and perspective to take with you'].map(x => `<p style="display:flex;gap:10px;align-items:center;margin:0;font-size:.85rem;color:var(--lav-4)"><span style="color:var(--gold-2)">${ic('check','sm')}</span>${x}</p>`).join('')}</div>
+      <button class="btn b-gold full" data-go="book">Explore Private Readings ${ic('arrow','sm')}</button><p style="font-size:.62rem;color:rgba(221,208,230,.5);margin:12px 0 0;line-height:1.5">Offer and price reflect the publicly visible reading. Booking here is a demonstration only.</p></div></article></section>
+    <section class="pad sec"><div class="sec-h"><div><p class="eyebrow">The experience</p><h2 class="display">How a reading works</h2></div></div><div class="list">
+      ${[['feather', 'Share what is on your heart', 'Tell us a little about what you would like to explore.'], ['cal', 'Choose a time that feels right', 'Suggest a preferred date and time of day.'], ['moon', 'Your reading', 'One-on-one time to reflect and gain perspective.']].map(([i, t, d], k) => `<div class="card" style="padding:16px;display:flex;gap:14px;align-items:flex-start"><span style="width:40px;height:40px;border-radius:50%;background:var(--lav-4);color:var(--plum-4);display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic(i,'sm')}</span><div><p class="eyebrow">Step ${k + 1}</p><p class="display" style="font-size:1.15rem;color:var(--plum);margin-top:2px">${t}</p><p style="font-size:.82rem;color:var(--muted);margin:4px 0 0">${d}</p></div></div>`).join('')}</div></section>`;
+  },
+
+  book() {
+    return `<section class="pad" style="padding-top:16px"><button style="display:inline-flex;gap:6px;align-items:center;font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--plum-4)" data-go="readings">${ic('left','sm')} Readings</button>
+      <div class="dark" style="margin-top:12px;display:flex;align-items:center;gap:14px;padding:12px"><span class="art" style="width:72px;height:72px;border-radius:14px;flex-shrink:0">${scene('tarot')}</span><div><p class="eyebrow">Request a reading</p><p class="display" style="font-size:1.3rem;margin-top:2px">Private 1:1 Tarot Reading</p><p style="margin:2px 0 0;color:var(--gold-2);font-family:var(--serif);font-size:1.2rem">$149</p></div></div>
+      <form class="card stack" style="padding:18px;margin-top:14px" data-form="book" novalidate>
+        <p style="display:flex;gap:10px;margin:0;background:var(--lav-4);border-radius:12px;padding:12px;font-size:.8rem;color:var(--plum-3);line-height:1.5">${ic('info','sm')} Booking demonstration. Nothing is sent, booked or charged.</p>
+        <label class="lb"><span>First name</span><input class="field" id="b-name" value="${esc(S.name)}" autocomplete="given-name"></label>
+        <label class="lb"><span>Email</span><input class="field" id="b-email" type="email" autocomplete="email"></label>
+        <label class="lb"><span>Preferred date</span><input class="field" id="b-date" type="date"></label>
+        <div><span style="display:block;font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;font-weight:500">Preferred time</span><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${['Morning', 'Midday', 'Afternoon', 'Evening'].map(t => `<button type="button" class="chip" style="border-radius:12px" data-act="time" data-t="${t}">${t}</button>`).join('')}</div></div>
+        <label class="lb"><span>What would you like to explore during your reading?</span><textarea class="field" id="b-focus" placeholder="A crossroads, a relationship, a new season, or simply a wish for clarity…"></textarea></label>
+        <p class="err" id="b-err" hidden></p>
+        <button class="btn b-plum full" style="height:50px">Request a Reading</button></form></section>`;
+  },
+
+  events() {
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">Events & gatherings</p><h1 class="display h1">Gather with your coven.</h1><p class="sub">Circles, workshops and evenings together, online and in person.</p><div style="margin-top:12px"><span class="tag">Sample events · not announced by A Good Witch</span></div></section>
+    <section class="pad list" style="margin-top:18px;gap:16px">${EVENTS.map(e => { const rs = S.rsvps[e.id], it = S.interests.includes(e.id); return `<article class="card" style="overflow:hidden"><div class="art" style="height:170px">${scene(e.art)}
+      <span class="tag" style="position:absolute;top:12px;left:12px;z-index:2">${ic(e.v ? 'users' : 'pin','sm')} ${e.v ? 'Virtual' : 'In person'}</span>
+      <button class="round ${it ? 'on' : ''}" style="position:absolute;top:10px;right:10px;background:${it ? '' : 'rgba(18,10,26,.35)'};color:${it ? '' : '#fff'};border-color:rgba(255,255,255,.3)" data-act="interest" data-id="${e.id}" aria-label="Interested">${ic('heart','sm',it)}</button>
+      ${rs ? `<span class="tag" style="position:absolute;bottom:12px;left:12px;z-index:2;background:var(--gold);color:var(--night);border-color:var(--gold)">${ic('check','sm')} Spot saved (demo)</span>` : ''}</div>
+      <div style="padding:16px"><p class="eyebrow">${e.when}</p><h2 class="display" style="font-size:1.45rem;color:var(--plum);margin-top:4px">${e.t}</h2><p style="font-size:.72rem;color:var(--muted);margin:4px 0 0;display:flex;gap:4px;align-items:center">${ic('pin','sm')} ${e.where}</p><p style="font-size:.85rem;line-height:1.55;color:var(--muted);margin:10px 0 14px">${e.d}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn sm b-line" data-act="eventInfo" data-id="${e.id}">Learn more</button><button class="btn sm ${rs ? 'b-gold' : 'b-plum'}" data-act="rsvp" data-id="${e.id}">${rs ? 'Spot saved' : 'Save my spot'}</button></div></div></article>`; }).join('')}</section>
+    <p class="note">Fictional example events showing how gatherings could be announced and booked. Registration is simulated.</p>`;
+  },
+
+  shop() {
+    const hat = PRODUCTS[0];
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">The collection</p><h1 class="display h1">Shop A Good Witch.</h1><p class="sub">Pieces to carry a little magic with you, wherever you go.</p></section>
+    <section class="pad" style="margin-top:18px"><article class="card" style="overflow:hidden"><button class="art" style="display:block;width:100%;height:300px" data-act="product" data-id="hat">${scene('stashhat')}<span class="tag" style="position:absolute;top:14px;left:14px;background:var(--plum);color:var(--gold-2);border-color:var(--plum)">Signature piece</span></button>
+      <div style="padding:18px"><p class="eyebrow">Featured</p><h2 class="display" style="font-size:2rem;color:var(--plum);margin-top:4px">${hat.n}</h2><p class="display" style="font-size:1.6rem;color:var(--plum-4);margin-top:4px">$59</p><p style="font-size:.88rem;line-height:1.6;color:var(--muted)">${hat.d}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn b-plum" data-act="add" data-id="hat">Add to Bag</button><button class="btn b-line" data-act="product" data-id="hat">Details</button></div></div></article></section>
+    <section class="pad sec"><div class="sec-h"><h2 class="display">Kumihimo necklaces</h2></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${PRODUCTS.slice(1).map(p => `<div><div style="position:relative;border-radius:16px;overflow:hidden;box-shadow:0 10px 22px -14px rgba(43,22,54,.4)"><button class="art" style="display:block;width:100%;aspect-ratio:4/5" data-act="product" data-id="${p.id}" aria-label="${p.n}">${scene(p.art)}</button><button style="position:absolute;right:8px;bottom:8px;width:36px;height:36px;border-radius:50%;background:var(--plum);color:var(--ivory-2);display:flex;align-items:center;justify-content:center" data-act="add" data-id="${p.id}" aria-label="Add ${p.n} to bag">${ic('plus','sm')}</button></div>
+      <button style="text-align:left;margin-top:8px" data-act="product" data-id="${p.id}"><b style="display:block;font-family:var(--serif);font-weight:500;font-size:1.02rem;line-height:1.2;color:var(--plum)">${p.n}</b><small style="color:var(--muted)">${$$(p.p)}</small></button></div>`).join('')}</div></section>
+    <p class="note">Names and prices reflect the publicly visible store. Artwork and descriptions were created for this concept. Checkout is simulated.</p>`;
+  },
+
+  product() {
+    const p = PRODUCTS.find(x => x.id === currentProduct) || PRODUCTS[0], inBag = S.cart[p.id] || 0;
+    return `<div class="art" style="aspect-ratio:4/5;max-height:420px;width:100%">${scene(p.art)}<button class="round" style="position:absolute;top:12px;left:12px;background:rgba(253,250,244,.9);z-index:2" data-go="shop" aria-label="Back to shop">${ic('left','sm')}</button></div>
+    <section class="pad" style="padding-top:18px"><p class="eyebrow">${p.id === 'hat' ? 'Signature hat' : 'Kumihimo necklace'}</p><h1 class="display h1" style="font-size:2.1rem">${p.n}</h1><p class="display" style="font-size:1.7rem;color:var(--plum-4);margin-top:6px">${$$(p.p)}</p><p style="font-size:.9rem;line-height:1.6;color:var(--muted)">${p.d}</p>
+      <div class="list" style="gap:6px">${p.x.map(x => `<p style="display:flex;gap:8px;align-items:center;margin:0;font-size:.85rem;color:var(--plum-3)"><span style="color:var(--gold-3)">${ic('check','sm')}</span>${x}</p>`).join('')}</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:20px"><div class="qty"><button data-act="pq" data-d="-1" aria-label="Decrease">${ic('minus','sm')}</button><span>${ui.qty}</span><button data-act="pq" data-d="1" aria-label="Increase">${ic('plus','sm')}</button></div><button class="btn b-plum" style="flex:1" data-act="addQty" data-id="${p.id}">${ic('bag','sm')} Add to Bag</button></div>
+      ${inBag ? `<button class="card" style="display:flex;justify-content:space-between;width:100%;padding:12px 16px;margin-top:12px;background:var(--lav-4);font-size:.85rem;color:var(--plum)" data-go="bag"><span>${inBag} in your bag</span><span class="eyebrow">View bag →</span></button>` : ''}
+      <h2 class="display" style="font-size:1.4rem;color:var(--plum);margin:28px 0 12px">You may also love</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${PRODUCTS.filter(x => x.id !== p.id).slice(0, 2).map(x => `<button style="text-align:left" data-act="product" data-id="${x.id}"><span class="art" style="display:block;aspect-ratio:4/5;border-radius:14px">${scene(x.art)}</span><b style="display:block;font-family:var(--serif);font-weight:500;margin-top:6px;color:var(--plum);line-height:1.2">${x.n}</b><small style="color:var(--muted)">${$$(x.p)}</small></button>`).join('')}</div></section>`;
+  },
+
+  bag() {
+    const lines = Object.entries(S.cart).map(([id, q]) => ({ p: PRODUCTS.find(x => x.id === id), q })).filter(l => l.p);
+    const n = bagCount(), sub = lines.reduce((a, l) => a + l.p.p * l.q, 0);
+    if (!lines.length) return `<section class="pad" style="padding-top:22px"><p class="eyebrow">Shopping bag</p><h1 class="display h1">Your bag</h1><div class="empty" style="margin-top:20px"><b>Your bag is empty</b><p>Find a piece that feels like you: the signature hat or a hand-braided necklace.</p><button class="btn sm b-plum" data-go="shop">Shop the collection</button></div></section>`;
+    return `<section class="pad" style="padding-top:22px"><p class="eyebrow">Shopping bag</p><h1 class="display h1">Your bag</h1><p class="sub">${n} ${n === 1 ? 'item' : 'items'} waiting for you.</p></section>
+    <section class="pad list" style="margin-top:16px">${lines.map(({ p, q }) => `<div class="card" style="display:flex;gap:12px;padding:10px"><button class="art" style="width:84px;height:100px;border-radius:12px;flex-shrink:0" data-act="product" data-id="${p.id}">${scene(p.art)}</button><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;justify-content:space-between;gap:6px"><b style="font-family:var(--serif);font-weight:500;font-size:1.05rem;line-height:1.2;color:var(--plum)">${p.n}</b><button style="color:#9a8aa4" data-act="rm" data-id="${p.id}" aria-label="Remove ${p.n}">${ic('trash','sm')}</button></div><small style="color:var(--muted);margin-top:2px">${$$(p.p)} each</small><div style="margin-top:auto;display:flex;justify-content:space-between;align-items:center"><div class="qty"><button data-act="cq" data-id="${p.id}" data-d="-1" aria-label="Decrease">${ic('minus','sm')}</button><span>${q}</span><button data-act="cq" data-id="${p.id}" data-d="1" aria-label="Increase">${ic('plus','sm')}</button></div><b style="font-weight:500;font-variant-numeric:tabular-nums">${$$(p.p * q)}</b></div></div></div>`).join('')}</section>
+    <section class="pad" style="margin-top:16px"><div class="card" style="padding:18px"><h2 class="display" style="font-size:1.5rem;color:var(--plum)">Order summary</h2>
+      <div style="display:grid;gap:10px;margin-top:14px;font-size:.88rem"><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Subtotal (${n})</span><span style="font-variant-numeric:tabular-nums">${$$(sub)}</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Shipping</span><span style="color:var(--muted)">At checkout</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Taxes</span><span style="color:var(--muted)">At checkout</span></div><div class="orn" style="margin:4px 0">◆</div><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-weight:500">Estimated total</b><span class="display" style="font-size:1.6rem;color:var(--plum)">${$$(sub)}</span></div></div>
+      <button class="btn b-plum full" style="margin-top:16px;height:50px" data-act="checkout">${ic('lock','sm')} Checkout</button><button class="btn b-line full" style="margin-top:8px" data-go="shop">Continue shopping</button><p class="hint" style="text-align:center">Simulated checkout. No payment is processed.</p></div></section>`;
+  },
+
+  membership() {
+    const f = [['play', 'Exclusive content', 'Daily messages, rituals and videos from Shelley.'], ['chat', 'Community discussions', 'Daily prompts and gentle conversation.'], ['cal', 'Event announcements', 'Be first to hear about circles and workshops.'], ['store', 'Special merchandise offers', 'Early looks at new pieces and member drops.'], ['info', 'Member updates', 'Behind-the-scenes notes from inside A Good Witch.'], ['spark', 'Community experiences', 'Shared rituals and moments to celebrate.']];
+    return `<section style="position:relative;min-height:440px;display:flex;flex-direction:column;justify-content:flex-end;color:var(--ivory-2)"><div class="art" style="position:absolute;inset:0">${scene('hat','xMidYMax')}</div><div style="position:absolute;inset:0;background:linear-gradient(to top,var(--night),rgba(18,10,26,.7) 45%,rgba(18,10,26,.2))"></div>
+      <div style="position:relative;padding:24px 18px"><span class="tag dk">Proposed digital experience</span><p class="eyebrow" style="color:var(--lav-2);margin-top:16px">The Good Coven</p><h1 class="display" style="font-size:2.4rem;margin-top:6px">Your people. Your space. Your coven.</h1><p style="font-size:.9rem;line-height:1.6;color:rgba(238,230,242,.85)">Stay connected to the community, discover exclusive experiences, and keep up with everything happening inside A Good Witch.</p>
+      <div class="stack" style="gap:8px;margin-top:16px"><button class="btn b-gold full" data-go="coven">Explore the Coven ${ic('arrow','sm')}</button><button class="btn b-lineL full" data-act="covenInterest">${S.coven ? ic('check','sm') + " I'm interested" : "I'd love this"}</button></div></div></section>
+    <section class="pad sec"><p class="eyebrow">What membership could include</p><h2 class="display" style="font-size:1.8rem;color:var(--plum);margin-top:6px">A home for everything magic.</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px">${f.map(([i, t, d]) => `<div class="card" style="padding:14px"><span style="width:38px;height:38px;border-radius:50%;background:var(--lav-4);color:var(--plum-4);display:flex;align-items:center;justify-content:center">${ic(i,'sm')}</span><p class="display" style="font-size:1.12rem;color:var(--plum);margin-top:10px">${t}</p><p style="font-size:.76rem;line-height:1.45;color:var(--muted);margin:4px 0 0">${d}</p></div>`).join('')}</div></section>
+    <p class="note">This membership is a proposal for the concept. It does not describe an existing paid membership, and no pricing is implied.</p>`;
+  },
+
+  profile() {
+    const tabs = [['saved', 'Affirmations'], ['journal', 'Reflections'], ['favs', 'Favourites'], ['community', 'Community'], ['events', 'Events']];
+    let b = '';
+    if (ui.profTab === 'saved') {
+      const ids = [...new Set([...S.savedA, ...S.favA])];
+      b = ids.length || S.savedMsg ? `<div class="list">${S.savedMsg ? `<div class="card" style="padding:14px"><p class="eyebrow">Saved daily message</p><p style="font-family:var(--serif);font-size:1.1rem;color:var(--plum);margin:6px 0 4px">“${today().a[1]}”</p><p style="font-size:.82rem;color:var(--muted);margin:0">${today().note}</p></div>` : ''}${ids.map(id => { const a = AFF[+id.slice(1)]; return `<div class="dark" style="padding:16px"><p class="eyebrow">${a[0]}${S.favA.includes(id) ? ' · Favourite' : ''}</p><p class="display" style="font-size:1.35rem;margin-top:6px">“${a[1]}”</p></div>`; }).join('')}</div>` : emptyBox('No saved affirmations yet', 'Tap the bookmark on any affirmation, or Save this message on Home.', 'daily', 'Find an affirmation');
+    } else if (ui.profTab === 'journal') {
+      b = S.journal.length ? `<div class="list">${S.journal.map(e => `<div class="card entry"><p class="eyebrow">${{ reflection: 'Reflection', release: 'Released', intention: 'Intention' }[e.kind]}${e.tag ? ' · ' + esc(e.tag) : ''} · ${ago(e.ts)}</p><p style="font-family:var(--serif);font-style:italic;color:#7d6889">${esc(e.q)}</p><p>${esc(e.text)}</p></div>`).join('')}</div>` : emptyBox('Your journal is waiting', 'Reflections, releases and intentions from Daily Magic appear here.', 'daily', 'Write a reflection');
+    } else if (ui.profTab === 'favs') {
+      const v = VIDEOS.filter(x => S.favV.includes(x.id)), a = S.favA.map(id => AFF[+id.slice(1)]);
+      b = v.length || a.length ? `<div class="list">${v.map(x => `<button class="card" style="display:flex;gap:12px;align-items:center;padding:10px;text-align:left" data-act="video" data-id="${x.id}"><span class="art" style="width:60px;height:60px;border-radius:12px;flex-shrink:0">${scene(x.art)}</span><span><p class="eyebrow">${x.k} · ${x.len}</p><b style="font-family:var(--serif);font-weight:500;font-size:1.08rem;color:var(--plum)">${x.t}</b></span></button>`).join('')}${a.map(x => `<div class="card" style="display:flex;gap:10px;align-items:center;padding:14px"><span style="color:var(--plum-4)">${ic('heart','sm',true)}</span><span style="font-family:var(--serif);font-size:1.05rem;color:var(--plum)">${x[1]}</span></div>`).join('')}</div>` : emptyBox('No favourites yet', 'Heart an affirmation or a message from Shelley to keep it close.', 'home', "Explore today's magic");
+    } else if (ui.profTab === 'community') {
+      const replies = Object.entries(S.replies).flatMap(([pid, rs]) => rs.map(r => ({ r, p: POSTS.find(x => x.id === pid) })));
+      const liked = POSTS.filter(p => S.liked.includes(p.id));
+      b = S.posts.length || replies.length || liked.length ? `<div class="list">${S.posts.map(p => `<div class="card entry"><p class="eyebrow">Your post · ${ago(p.ts)}</p><p style="font-family:var(--serif);font-style:italic;color:#7d6889">${esc(p.q)}</p><p>${esc(p.body)}</p></div>`).join('')}${replies.map(({ r, p }) => `<div class="card entry"><p class="eyebrow">Your reply</p><p style="font-size:.75rem;color:var(--muted)">On “${p.q}”</p><p>${esc(r.body)}</p></div>`).join('')}${liked.map(p => `<div class="card entry"><p class="eyebrow">You loved · ${MEMBERS[p.m][0]}</p><p>${p.body}</p></div>`).join('')}</div>` : emptyBox('No community activity yet', 'Share, reply or heart a post in the Good Coven.', 'coven', 'Visit the coven');
+    } else {
+      const ev = EVENTS.filter(e => S.interests.includes(e.id) || S.rsvps[e.id]);
+      b = ev.length || S.readings.length ? `<div class="list">${ev.map(e => `<button class="card" style="display:flex;gap:12px;align-items:center;padding:10px;text-align:left" data-go="events"><span class="art" style="width:56px;height:56px;border-radius:12px;flex-shrink:0">${scene(e.art)}</span><span style="flex:1;min-width:0"><b style="display:block;font-family:var(--serif);font-weight:500;font-size:1.05rem;color:var(--plum)">${e.t}</b><small style="color:var(--muted);font-size:.7rem">${e.where}</small></span><span class="topic" style="${S.rsvps[e.id] ? 'background:var(--gold);color:var(--night)' : ''}">${S.rsvps[e.id] ? 'Spot saved' : 'Interested'}</span></button>`).join('')}${S.readings.map(r => `<div class="card entry"><p class="eyebrow">Reading request · ${esc(r.date || 'Date TBC')} · ${esc(r.time)}</p><p>${esc(r.focus)}</p><p class="hint">Simulated request · not sent, not booked</p></div>`).join('')}</div>` : emptyBox('No event interests yet', 'Heart an event or save your spot to keep track of gatherings you love.', 'events', 'Browse events');
+    }
+    return `<section class="pad" style="padding-top:16px"><div class="dark" style="padding:26px 18px 20px;text-align:center"><div class="art" style="position:absolute;inset:0;opacity:.7">${scene('moon')}</div><div style="position:absolute;inset:0;background:linear-gradient(to top,var(--plum),rgba(43,22,54,.45))"></div>
+      <div style="position:relative"><div style="display:inline-block;position:relative">${me(88)}<button style="position:absolute;right:-4px;bottom:-4px;width:32px;height:32px;border-radius:50%;background:var(--gold);color:var(--night);display:flex;align-items:center;justify-content:center" data-act="editProfile" aria-label="Edit profile">${ic('pen','sm')}</button></div>
+      <p class="eyebrow" style="margin-top:12px">My magic</p><h1 class="display" style="font-size:2rem;margin-top:4px">${esc(S.name || 'Welcome, witch')}</h1><p style="font-size:.8rem;color:rgba(238,230,242,.7);margin:4px 0 14px">${S.journal.length} journal ${S.journal.length === 1 ? 'entry' : 'entries'} · ${bagCount()} in bag</p><button class="btn sm b-lineL" data-act="editProfile">Edit profile</button></div></div></section>
+    <div class="hscroll" style="margin-top:16px">${tabs.map(([k, l]) => `<button class="chip ${ui.profTab === k ? 'on' : ''}" data-act="ptab" data-t="${k}">${l}</button>`).join('')}</div>
+    <section class="pad" style="margin-top:14px">${b}</section>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:26px"><button style="font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--plum-4)" data-act="about">About this concept</button><button style="font-size:.72rem;color:#9a8aa4" data-act="reset">Reset demo data</button></div>`;
+  },
+};
+
+function journalList(kind, empty) {
+  const es = S.journal.filter(e => e.kind === kind);
+  if (!es.length) return `<div class="empty"><b>Nothing here yet</b><p style="margin-bottom:0">${empty}</p></div>`;
+  return `<div class="list">${es.map(e => `<div class="card entry"><div style="display:flex;justify-content:space-between"><p class="eyebrow">${e.tag ? esc(e.tag) + ' · ' : ''}${ago(e.ts)}</p><button style="color:#9a8aa4" data-act="delEntry" data-id="${e.id}" aria-label="Delete entry">${ic('trash','sm')}</button></div><p style="font-family:var(--serif);font-style:italic;color:#7d6889">${esc(e.q)}</p><p>${esc(e.text)}</p></div>`).join('')}</div>`;
+}
+const emptyBox = (t, p, go, label) => `<div class="empty"><b>${t}</b><p>${p}</p><button class="btn sm b-plum" data-go="${go}">${label}</button></div>`;
+
+/* ================= welcome ================= */
+function welcomeHTML() {
+  return `<div class="welcome" id="welcome"><div class="art">${scene('hat','xMidYMax')}</div><div class="in">
+    <div style="display:flex;justify-content:space-between;align-items:center"><span class="mark">A GOOD WITCH</span><button class="tag dk" data-act="about">Concept</button></div>
+    <div style="margin-top:auto;padding-top:46%"><p class="eyebrow" style="color:var(--gold-2)">Your daily magic · Your community · Your journey</p>
+    <h1 class="display">A little magic for your everyday life.</h1><div class="orn" style="width:140px">◆</div>
+    <p class="lead">A space for daily inspiration, self-love, spiritual reflection, and connection with a community that celebrates the journey.</p>
+    <div class="stack" style="gap:10px;margin-top:26px"><button class="btn b-gold full" style="height:52px" data-go="home">Enter the Coven ${ic('arrow','sm')}</button><button class="btn b-lineL full" style="height:52px" data-act="tour">Explore the Experience</button></div>
+    <p style="font-size:.62rem;line-height:1.5;color:rgba(221,208,230,.5);margin:20px 0 0">An independent concept inspired by the publicly visible A Good Witch brand. Not an official product or authorized collaboration.</p></div></div></div>`;
+}
+const TOUR = [['candles', 'Daily Magic', 'A little ritual, every day', 'A fresh affirmation, a reflection prompt, a letting-go exercise and a space to set your intention.', 'daily'], ['circle', 'The Good Coven', 'Your people, in one place', 'Daily conversations, member spotlights and announcements in a gentle community space.', 'coven'], ['tarot', 'Readings', 'Find your guidance', 'Explore the private 1:1 tarot reading and request a time that feels right.', 'readings'], ['moon', 'Events', 'Gather with your coven', 'Full moon circles, workshops and evenings together, virtual and in person.', 'events'], ['stashhat', 'Shop', 'Wear a little magic', 'The Magnetic Stash Hat and hand-braided kumihimo necklaces, a tap away.', 'shop']];
+let tourStep = 0;
+function tourHTML() { const [a, e, t, d, go] = TOUR[tourStep];
+  return `<div class="art" style="height:210px;margin:-22px -20px 0;border-radius:26px 26px 0 0">${scene(a)}</div><p class="eyebrow" style="margin-top:16px;color:var(--gold-2)">${tourStep + 1} / 5 · ${e}</p><h3 class="display" style="margin-top:6px">${t}</h3><p style="color:rgba(238,230,242,.8);line-height:1.6;margin:0">${d}</p>
+  <div style="display:flex;gap:6px;margin:18px 0">${TOUR.map((_, i) => `<button aria-label="Step ${i + 1}" data-act="tourGo" data-i="${i}" style="height:6px;border-radius:3px;width:${i === tourStep ? 24 : 6}px;background:${i === tourStep ? 'var(--gold-2)' : 'rgba(253,250,244,.25)'}"></button>`).join('')}</div>
+  <div style="display:flex;gap:10px"><button class="round" data-act="tourGo" data-i="${Math.max(0, tourStep - 1)}" aria-label="Previous" ${tourStep ? '' : 'disabled style="opacity:.3"'}>${ic('left','sm')}</button>${tourStep < 4 ? `<button class="btn b-lineL" style="flex:1" data-act="tourGo" data-i="${tourStep + 1}">Next ${ic('right','sm')}</button>` : `<button class="btn b-gold" style="flex:1" data-go="home">Enter the Coven</button>`}</div>
+  <button style="display:block;margin:14px auto 0;font-size:.64rem;letter-spacing:.16em;text-transform:uppercase;color:rgba(221,208,230,.7)" data-go="${go}">Jump to ${e}</button>`; }
+
+/* ================= router ================= */
+let route = 'welcome';
+function go(r, opts = {}) {
+  if (r.startsWith('product-')) { currentProduct = r.slice(8); r = 'product'; }
+  if (!ROUTES[r]) r = 'welcome';
+  route = r; closeSheet();
+  if (r === 'product') ui.qty = 1;
+  const hash = r === 'product' ? 'product-' + currentProduct : r;
+  if (location.hash.slice(1) !== hash) history.replaceState(null, '', '#' + hash);
+  render(); if (!opts.keepScroll) view.scrollTop = 0;
+}
+function render() {
+  const w = document.getElementById('welcome'); if (w) w.remove();
+  const isW = route === 'welcome';
+  if (isW) document.getElementById('screen').insertAdjacentHTML('beforeend', welcomeHTML());
+  else view.innerHTML = screens[route]();
+  document.getElementById('topAvatar').innerHTML = me(30);
+  document.getElementById('topBag').innerHTML = ic('bag') + (bagCount() ? `<span class="badge">${bagCount()}</span>` : '');
+  const tabRoute = { book: 'readings', product: 'shop', bag: 'shop' }[route] || route;
+  document.getElementById('tabs').innerHTML = TABS.map(([r, l, i]) => `<button class="${tabRoute === r ? 'on' : ''}" data-go="${r}">${ic(i)}${l}</button>`).join('');
+  document.getElementById('guide').innerHTML = Object.entries(ROUTES).map(([r, l], i) => `<li><button class="${route === r ? 'on' : ''}" data-go="${r === 'product' ? 'product-hat' : r}"><span>${String(i + 1).padStart(2, '0')}</span>${l}</button></li>`).join('');
+}
+const rerender = () => { const y = view.scrollTop; render(); view.scrollTop = y; };
+
+/* ================= actions ================= */
+let playTimer;
+function videoSheet(id) {
+  const v = VIDEOS.find(x => x.id === id), fav = S.favV.includes(id);
+  openSheet(`<p class="eyebrow" style="color:var(--gold-2)">From Shelley · ${v.k}</p><h3 class="display">${v.t}</h3>
+    <div class="art fade-n" style="aspect-ratio:4/5;border-radius:18px">${scene(v.art)}<span class="tag dk" style="position:absolute;top:12px;left:12px;z-index:2">Sample message</span>
+    <div style="position:absolute;z-index:2;inset:auto 0 0;padding:16px"><p class="display" id="vline" style="font-size:1.25rem;font-style:italic;min-height:3em;margin-bottom:12px"></p>
+    <div style="display:flex;gap:12px;align-items:center"><button id="vplay" class="round" style="background:var(--ivory-2);color:var(--plum);width:46px;height:46px" data-act="play" data-id="${id}" aria-label="Play">${ic('play','sm')}</button><div style="flex:1;height:4px;border-radius:2px;background:rgba(253,250,244,.2);overflow:hidden"><div id="vbar" style="height:100%;width:0;background:var(--gold-2)"></div></div><small style="font-variant-numeric:tabular-nums;color:var(--lav-3)">${v.len}</small></div></div></div>
+    <p style="font-size:.75rem;line-height:1.5;color:rgba(221,208,230,.55)">Shows how Shelley could publish exclusive videos and daily messages inside the app. Written for this prototype; no real video is shown.</p>
+    <button class="btn full ${fav ? 'b-gold' : 'b-lineL'}" data-act="favV" data-id="${id}">${ic('heart','sm',fav)} ${fav ? 'Favourited' : 'Favourite'}</button>`, true);
+}
+let bookTime = '';
+const handlers = {
+  close: closeSheet,
+  about: () => openSheet(`<p class="eyebrow">About this prototype</p><h3 class="display">A concept, not an official app</h3><div style="font-size:.9rem;line-height:1.6;color:var(--muted)"><p>An independent concept prototype inspired by the publicly visible A Good Witch brand. Not an official product or an authorized collaboration.</p><p>It shows how a creator could bring daily content, community, readings, events and merchandise together in one branded experience.</p><p>Members, posts, events and creator messages are fictional. Product names, prices and the private reading offer reflect the public store; descriptions were written for this concept. Membership is a proposal with no price. Nothing is booked, sent or charged, and anything you save stays in this browser.</p></div>`),
+  tour: () => { tourStep = 0; openSheet(tourHTML(), true); },
+  tourGo: el => { tourStep = +el.dataset.i; sheet.innerHTML = `<button class="x" data-act="close" aria-label="Close">${ic('x','sm')}</button>` + tourHTML(); },
+  saveMsg: () => { S.savedMsg = !S.savedMsg; save(); rerender(); toast(S.savedMsg ? 'Saved to your profile' : 'Removed from saved'); },
+  shareToday: () => { const t = today(); share(`“${t.a[1]}”\n\n${t.note}`); },
+  reflect: () => openSheet(`<p class="eyebrow">Private reflection</p><h3 class="display">Take a quiet moment</h3><p style="font-family:var(--serif);font-style:italic;font-size:1.3rem;color:var(--plum-3);margin:0 0 14px">“${today().q}”</p><form class="stack" data-form="reflectSheet"><label class="lb"><span>Your words</span><textarea class="field" id="rs-text" placeholder="Write whatever comes to you…" autofocus></textarea></label><p class="hint" style="margin-top:-8px">Saved only in this browser.</p><button class="btn b-plum full">Save to my journal</button></form>`),
+  video: el => videoSheet(el.dataset.id),
+  play: el => { const v = VIDEOS.find(x => x.id === el.dataset.id), bar = document.getElementById('vbar'), line = document.getElementById('vline'), btn = document.getElementById('vplay');
+    if (playTimer && btn.dataset.on) { clearInterval(playTimer); playTimer = null; btn.dataset.on = ''; btn.innerHTML = ic('play','sm'); return; }
+    let p = parseFloat(bar.style.width) || 0; if (p >= 100) p = 0; btn.dataset.on = '1'; btn.innerHTML = ic('pause','sm');
+    playTimer = setInterval(() => { p += 1.4; bar.style.width = Math.min(p, 100) + '%'; line.textContent = '“' + v.lines[Math.min(2, Math.floor(p / 34))] + '”'; if (p >= 100) { clearInterval(playTimer); playTimer = null; btn.dataset.on = ''; btn.innerHTML = ic('play','sm'); } }, 100); },
+  favV: el => { S.favV = tog(S.favV, el.dataset.id); save(); toast(S.favV.includes(el.dataset.id) ? 'Added to favourites' : 'Removed from favourites'); clearInterval(playTimer); playTimer = null; videoSheet(el.dataset.id); if (route !== 'welcome') { const y = view.scrollTop; view.innerHTML = screens[route](); view.scrollTop = y; } },
+  dtab: el => { ui.dailyTab = el.dataset.t; rerender(); },
+  affPrev: () => { ui.affOff = Math.min(6, ui.affOff + 1); rerender(); },
+  affNext: () => { ui.affOff = Math.max(0, ui.affOff - 1); rerender(); },
+  affPick: el => { ui.affOff = +el.dataset.o; render(); view.scrollTop = 0; },
+  saveA: el => { S.savedA = tog(S.savedA, el.dataset.id); save(); rerender(); toast(S.savedA.includes(el.dataset.id) ? 'Affirmation saved' : 'Removed from saved'); },
+  favA: el => { S.favA = tog(S.favA, el.dataset.id); save(); rerender(); toast(S.favA.includes(el.dataset.id) ? 'Marked as a favourite' : 'Removed from favourites'); },
+  shareA: el => share(`“${AFF[+el.dataset.id][1]}”`),
+  newPrompt: () => { ui.promptShift = (ui.promptShift + 1) % 7; rerender(); },
+  relCat: el => { ui.release = el.dataset.c; rerender(); },
+  energy: el => { ui.energy = el.dataset.e; rerender(); },
+  delEntry: el => { S.journal = S.journal.filter(e => e.id !== el.dataset.id); save(); rerender(); },
+  compose: () => openSheet(`<p class="eyebrow">Join the conversation</p><h3 class="display">Share with the coven</h3><form class="stack" data-form="post"><div class="list" style="gap:6px">${['What is one small ritual that brings you back to yourself?', 'What are you grateful for today?', "What is one thing you're working on releasing?", 'Share something beautiful that happened this week.'].map((q, i) => `<label style="display:flex;gap:10px;align-items:center;border:1px solid rgba(58,31,72,.15);border-radius:12px;padding:10px 12px;font-family:var(--serif);font-size:1rem;color:var(--plum)"><input type="radio" name="pq" value="${esc(q)}" ${i ? '' : 'checked'} style="accent-color:#3a1f48">${q}</label>`).join('')}</div><label class="lb"><span>Your share</span><textarea class="field" id="post-text" placeholder="Write from the heart…"></textarea></label><p class="hint" style="margin-top:-8px">Simulation: stored in this browser only, never posted anywhere.</p><button class="btn b-plum full">${ic('send','sm')} Share with the coven</button></form>`),
+  toFeed: () => document.getElementById('feed').scrollIntoView({ behavior: 'smooth' }),
+  topic: el => { ui.topic = el.dataset.t; rerender(); },
+  like: el => { S.liked = tog(S.liked, el.dataset.id); save(); rerender(); },
+  sharePost: el => { const p = POSTS.find(x => x.id === el.dataset.id); share(`${p.q}\n“${p.body}”`); },
+  delPost: el => { S.posts = S.posts.filter(p => p.id !== el.dataset.id); save(); rerender(); },
+  comments: el => commentsSheet(el.dataset.id),
+  time: el => { bookTime = el.dataset.t; document.querySelectorAll('[data-act="time"]').forEach(b => b.classList.toggle('on', b === el)); },
+  interest: el => { S.interests = tog(S.interests, el.dataset.id); save(); rerender(); toast(S.interests.includes(el.dataset.id) ? 'Added to your event interests' : 'Removed from interests'); },
+  eventInfo: el => { const e = EVENTS.find(x => x.id === el.dataset.id); openSheet(`<p class="eyebrow">${e.where}</p><h3 class="display">${e.t}</h3><div class="art" style="height:170px;border-radius:16px">${scene(e.art)}</div><div style="display:grid;gap:6px;margin:14px 0;font-size:.85rem;color:var(--plum-3)"><p style="margin:0;display:flex;gap:8px;align-items:center">${ic('cal','sm')} ${e.when}</p><p style="margin:0;display:flex;gap:8px;align-items:center">${ic('moon','sm')} ${e.time}</p></div><p style="line-height:1.6;color:var(--muted);margin:0 0 10px">${e.d}</p>${e.x.map(x => `<p style="margin:4px 0;font-size:.85rem;color:var(--plum-3);display:flex;gap:8px;align-items:center"><span style="color:var(--gold-3)">${ic('spark','sm')}</span>${x}</p>`).join('')}<p class="hint">Fictional event for demonstration.</p><button class="btn b-plum full" style="margin-top:14px" data-act="rsvp" data-id="${e.id}">Save my spot</button>`); },
+  rsvp: el => rsvpSheet(el.dataset.id),
+  cancelRsvp: el => { delete S.rsvps[el.dataset.id]; save(); closeSheet(); rerender(); toast('Registration cancelled'); },
+  product: el => go('product-' + el.dataset.id),
+  add: el => { addCart(el.dataset.id, 1); },
+  pq: el => { ui.qty = Math.max(1, Math.min(10, ui.qty + +el.dataset.d)); rerender(); },
+  addQty: el => { addCart(el.dataset.id, ui.qty); ui.qty = 1; rerender(); },
+  cq: el => { const id = el.dataset.id; S.cart[id] = Math.min(10, (S.cart[id] || 0) + +el.dataset.d); if (S.cart[id] <= 0) delete S.cart[id]; save(); rerender(); },
+  rm: el => { delete S.cart[el.dataset.id]; save(); rerender(); },
+  checkout: () => { const n = bagCount(), sub = Object.entries(S.cart).reduce((a, [id, q]) => a + PRODUCTS.find(p => p.id === id).p * q, 0); openSheet(`<p class="eyebrow">Checkout demonstration</p><h3 class="display">This is where checkout would begin</h3><div class="art" style="height:140px;border-radius:16px">${scene('candles')}</div><p style="line-height:1.6;color:var(--muted)">In a live app, this step would hand off to the store's existing secure checkout. In this prototype, no order is placed and no payment details are collected.</p><div style="background:var(--lav-4);border-radius:14px;padding:14px;font-size:.88rem;display:grid;gap:4px"><div style="display:flex;justify-content:space-between"><span>Items</span><span>${n}</span></div><div style="display:flex;justify-content:space-between"><span>Estimated total</span><b style="font-weight:500">${$$(sub)}</b></div></div><div class="stack" style="gap:8px;margin-top:16px"><button class="btn b-plum full" data-act="close">Keep my bag</button><button class="btn b-line full" data-act="clearBag">Clear bag and finish demo</button></div>`); },
+  clearBag: () => { S.cart = {}; save(); closeSheet(); rerender(); toast('Bag cleared. Demo complete'); },
+  covenInterest: () => { S.coven = !S.coven; save(); rerender(); toast(S.coven ? 'Thanks! Interest noted on this device' : 'Interest removed'); },
+  ptab: el => { ui.profTab = el.dataset.t; rerender(); },
+  editProfile: () => openSheet(`<p class="eyebrow">Your profile</p><h3 class="display">Make it yours</h3><form class="stack" data-form="profile"><label class="lb"><span>First name</span><input class="field" id="pf-name" value="${esc(S.name)}" placeholder="What should we call you?" autofocus></label><div><span style="display:block;font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;font-weight:500">Profile colour</span><div class="row">${[285, 320, 250, 200, 150, 30].map(h => `<button type="button" data-act="hue" data-h="${h}" aria-label="Colour" style="border-radius:50%;${S.hue === h ? 'outline:2px solid var(--gold-3);outline-offset:2px' : ''}">${avatar(h, (S.name || 'W')[0].toUpperCase(), 38)}</button>`).join('')}</div></div><p class="hint">No account needed. Stored in this browser only.</p><button class="btn b-plum full">Save profile</button></form>`),
+  hue: el => { S.hue = +el.dataset.h; save(); document.querySelectorAll('[data-act="hue"]').forEach(b => b.style.outline = b === el ? '2px solid var(--gold-3)' : ''); },
+  reset: () => openSheet(`<h3 class="display">Start fresh?</h3><p style="color:var(--muted);line-height:1.6">This clears your saved affirmations, journal, posts, bag and registrations from this browser.</p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px"><button class="btn b-line" data-act="close">Keep everything</button><button class="btn b-plum" data-act="doReset">Reset</button></div>`),
+  doReset: () => { S = JSON.parse(JSON.stringify(DEF)); save(); closeSheet(); rerender(); toast('Demo data cleared'); },
+};
+function addCart(id, q) { S.cart[id] = Math.min(10, (S.cart[id] || 0) + q); save(); const p = PRODUCTS.find(x => x.id === id); toast(`${q > 1 ? q + ' × ' : ''}${p.n} added to your bag`); rerender(); }
+function commentsSheet(id) {
+  const p = POSTS.find(x => x.id === id), mine = S.replies[id] || [];
+  openSheet(`<p class="eyebrow">${p.q}</p><h3 class="display">Conversation</h3><div class="list">${p.c.map(([m, b]) => `<div style="display:flex;gap:10px">${avatar(MEMBERS[m][2], MEMBERS[m][0][0], 30)}<div style="background:var(--lav-4);border-radius:4px 16px 16px 16px;padding:8px 12px"><b style="font-size:.72rem;font-weight:500;color:var(--plum)">${MEMBERS[m][0]}</b><p style="margin:2px 0 0;font-size:.85rem">${b}</p></div></div>`).join('')}${mine.map(r => `<div style="display:flex;gap:10px">${me(30)}<div style="border:1px solid rgba(207,177,115,.5);border-radius:4px 16px 16px 16px;padding:8px 12px"><b style="font-size:.72rem;font-weight:500;color:var(--plum)">${esc(S.name || 'You')} · on this device</b><p style="margin:2px 0 0;font-size:.85rem">${esc(r.body)}</p></div></div>`).join('')}${!p.c.length && !mine.length ? '<p style="font-size:.85rem;color:var(--muted)">No replies yet. Offer the first kind word.</p>' : ''}</div>
+  <form style="display:flex;gap:8px;margin-top:16px" data-form="reply" data-id="${id}"><input class="field" id="reply-text" placeholder="Add a kind reply…" aria-label="Reply"><button class="btn b-plum" style="padding:0 16px" aria-label="Send reply">${ic('send','sm')}</button></form>`);
+}
+function rsvpSheet(id) {
+  const e = EVENTS.find(x => x.id === id), r = S.rsvps[id];
+  if (r) return openSheet(`<div style="text-align:center;padding:10px 0"><span style="width:56px;height:56px;border-radius:50%;background:var(--lav-4);color:var(--plum-4);display:inline-flex;align-items:center;justify-content:center">${ic('check')}</span><h3 class="display" style="margin:14px 0 8px">Your spot is saved, ${esc(r.name)}.</h3><p style="color:var(--muted);line-height:1.6;font-size:.88rem">In this demonstration, your registration is stored on this device only. No ticket was issued, nothing was emailed, and this fictional event has not been scheduled.</p><div class="stack" style="gap:8px;margin-top:16px"><button class="btn b-plum full" data-act="close">Done</button><button class="btn b-line full" data-act="cancelRsvp" data-id="${id}">Cancel my spot</button></div></div>`);
+  openSheet(`<p class="eyebrow">Event registration · demo</p><h3 class="display">${e.t}</h3><p style="font-size:.85rem;color:var(--muted);margin:-4px 0 14px">${e.when} · ${e.where}</p><form class="stack" data-form="rsvp" data-id="${id}" novalidate><label class="lb"><span>First name</span><input class="field" id="rv-name" value="${esc(S.name)}"></label><label class="lb"><span>Email</span><input class="field" id="rv-email" type="email"></label><p class="err" id="rv-err" hidden>Please add your name and a valid email.</p><button class="btn b-plum full">Save my spot</button><p class="hint" style="text-align:center">Simulated registration. Nothing is sent or booked.</p></form>`);
+}
+const uid = () => Math.random().toString(36).slice(2, 9);
+const validEmail = v => /^\S+@\S+\.\S+$/.test(v);
+const forms = {
+  reflectSheet: () => { const t = document.getElementById('rs-text').value.trim(); if (!t) return; S.journal.unshift({ id: uid(), kind: 'reflection', q: today().q, text: t, ts: Date.now() }); save(); closeSheet(); toast('Saved to your private journal'); },
+  reflection: f => { const t = document.getElementById('r-text').value.trim(); if (!t) return; S.journal.unshift({ id: uid(), kind: 'reflection', q: f.dataset.q, text: t, ts: Date.now() }); save(); rerender(); toast('Reflection saved to your journal'); },
+  release: () => { const t = document.getElementById('rel-text').value.trim(); if (!t) return; const keep = document.getElementById('rel-keep').checked, cat = ui.release;
+    if (keep) { S.journal.unshift({ id: uid(), kind: 'release', q: 'What are you ready to release?', tag: cat, text: t, ts: Date.now() }); save(); }
+    document.getElementById('releaseBox').innerHTML = `<div style="min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center"><p class="drift" style="font-family:var(--serif);font-style:italic;font-size:1.5rem;color:var(--lav-4);max-width:280px">${esc(t)}</p><p style="color:var(--gold-2);font-size:.85rem;animation:fade 1s 1.4s both">Breathe out. Let it drift away.</p></div>`;
+    setTimeout(() => { ui.release = null; if (route === 'daily') rerender(); toast(keep ? 'Released, and kept privately in your journal' : 'Released. Nothing was saved'); }, 2500); },
+  intention: () => { const t = document.getElementById('int-text').value.trim(); if (!t) return; S.journal.unshift({ id: uid(), kind: 'intention', q: 'What energy are you bringing into today?', tag: ui.energy, text: t, ts: Date.now() }); save(); rerender(); toast('Intention set: ' + ui.energy); },
+  post: f => { const t = document.getElementById('post-text').value.trim(); if (!t) return; const q = f.querySelector('input[name="pq"]:checked').value; const topic = /grateful/.test(q) ? 'Gratitude' : /releasing/.test(q) ? 'Releasing' : /beautiful/.test(q) ? 'Beautiful moments' : 'Intentions'; S.posts.unshift({ id: uid(), q, topic, body: t, ts: Date.now() }); ui.topic = 'All'; save(); closeSheet(); rerender(); setTimeout(() => document.getElementById('feed').scrollIntoView({ behavior: 'smooth' }), 80); toast('Shared with your coven (this device only)'); },
+  reply: f => { const t = document.getElementById('reply-text').value.trim(); if (!t) return; const id = f.dataset.id; (S.replies[id] = S.replies[id] || []).push({ body: t, ts: Date.now() }); save(); commentsSheet(id); rerender(); },
+  book: () => { const name = document.getElementById('b-name').value.trim(), email = document.getElementById('b-email').value.trim(), date = document.getElementById('b-date').value, focus = document.getElementById('b-focus').value.trim(), err = document.getElementById('b-err');
+    const miss = !name ? 'Please add your first name.' : !validEmail(email) ? 'Please add a valid email.' : !date ? 'Choose a preferred date.' : !bookTime ? 'Choose a preferred time.' : focus.length < 10 ? 'Share a sentence or two about what you would like to explore.' : '';
+    if (miss) { err.textContent = miss; err.hidden = false; return; }
+    S.readings.unshift({ name, email, date, time: bookTime, focus, ts: Date.now() }); if (!S.name) S.name = name; save(); bookTime = '';
+    view.innerHTML = `<section class="pad" style="padding-top:24px"><div class="dark" style="text-align:center;padding:30px 20px"><div class="art" style="position:absolute;inset:0;opacity:.4">${scene('candles')}</div><div style="position:absolute;inset:0;background:linear-gradient(rgba(31,15,39,.6),var(--plum))"></div><div style="position:relative"><span style="width:56px;height:56px;border-radius:50%;background:rgba(207,177,115,.2);color:var(--gold-2);display:inline-flex;align-items:center;justify-content:center">${ic('spark')}</span><p class="eyebrow" style="margin-top:16px">Demonstration complete</p><h1 class="display" style="font-size:2.2rem;margin-top:6px">Thank you, ${esc(name)}.</h1><p style="line-height:1.6;color:rgba(238,230,242,.8);font-size:.9rem">This is where your reading request would be received. In this prototype nothing has been sent, no appointment has been booked, and no payment was taken.</p><div style="text-align:left;background:rgba(253,250,244,.06);border:1px solid rgba(253,250,244,.1);border-radius:14px;padding:14px;font-size:.85rem;display:grid;gap:6px;margin:16px 0"><div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--lav-2)">Reading</span><span>Private 1:1 Tarot</span></div><div style="display:flex;justify-content:space-between;gap:10px"><span style="color:var(--lav-2)">Preferred</span><span>${esc(date)} · ${esc(S.readings[0].time)}</span></div></div><div class="stack" style="gap:8px"><button class="btn b-gold full" data-act="toProfileEvents">View in my profile</button><button class="btn b-lineL full" data-go="home">Back home</button></div></div></div></section>`; view.scrollTop = 0; render2(); },
+  rsvp: f => { const name = document.getElementById('rv-name').value.trim(), email = document.getElementById('rv-email').value.trim(); if (!name || !validEmail(email)) { document.getElementById('rv-err').hidden = false; return; } const id = f.dataset.id; S.rsvps[id] = { name, email, ts: Date.now() }; if (!S.interests.includes(id)) S.interests.push(id); if (!S.name) S.name = name; save(); rsvpSheet(id); rerender(); },
+  profile: () => { S.name = document.getElementById('pf-name').value.trim().slice(0, 30); save(); closeSheet(); rerender(); toast('Profile updated'); },
+};
+handlers.toProfileEvents = () => { ui.profTab = 'events'; go('profile'); };
+function render2() { document.getElementById('topAvatar').innerHTML = me(30); }
+
+document.addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); go(g.dataset.go); return; }
+  const a = e.target.closest('[data-act]'); if (a && handlers[a.dataset.act]) { e.preventDefault(); handlers[a.dataset.act](a); }
+});
+document.addEventListener('submit', e => { const f = e.target.closest('[data-form]'); if (f && forms[f.dataset.form]) { e.preventDefault(); forms[f.dataset.form](f); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !sheetWrap.hidden) closeSheet(); });
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); const cur = route === 'product' ? 'product-' + currentProduct : route; if (h && h !== cur) go(h); });
+
+go(location.hash.slice(1) || 'welcome');
+</script>
