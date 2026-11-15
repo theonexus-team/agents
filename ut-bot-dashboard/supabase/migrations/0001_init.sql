@@ -84,6 +84,12 @@ create table if not exists settings (
   news_minutes_before int not null default 10,
   news_minutes_after int not null default 10,
   news_flatten_at_blackout boolean not null default false,
+  -- Options risk plan (client, Nov 15 2026). Percentages of premium.
+  instrument text not null default 'options' check (instrument in ('options','shares')),
+  option_trade_usd numeric not null default 250,
+  option_stop_pct numeric not null default 20,
+  option_targets_pct numeric[] not null default '{40,75,100}',
+  option_target_exit_fractions numeric[] not null default '{0.3333,0.3333,0.3334}',
   updated_at timestamptz not null default now()
 );
 insert into settings (id) values (1) on conflict do nothing;

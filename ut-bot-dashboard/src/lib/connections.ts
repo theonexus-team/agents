@@ -108,6 +108,15 @@ export function getConnections(): Connection[] {
       steps: ["Starts on the free Forex Factory weekly feed — no account.", "Later: FXStreet API once the client has an agreement (OAuth2 client id/secret)."],
       envVars: vars([["ECON_PROVIDER", false]]),
     },
+    {
+      id: "apify",
+      name: "Apify",
+      purpose: "Optional backup for the Forex Factory calendar, using the same actor the Trading Oracle app already uses (scrapemint/forexfactory-economic-calendar).",
+      required: false,
+      signupUrl: "https://console.apify.com/sign-in",
+      steps: ["Only needed if the free Forex Factory feed gets blocked or rate-limited from Vercel.", "Console → Settings → API & Integrations → copy the API token → APIFY_API_TOKEN (can reuse the Oracle app's token)."],
+      envVars: vars([["APIFY_API_TOKEN", true]]),
+    },
   ];
 
   return list.map((c) => {

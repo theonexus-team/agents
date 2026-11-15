@@ -35,3 +35,8 @@ npm run send-test-signal     # posts a sample UT payload to the local webhook (n
 - `ut_bot_dual_webhook.pine` was not attached. Add it under `reference/`.
 - Stocks 6–10 of the watchlist, the UT Bot settings, and the other open questions in SPEC.md.
 - Spec note: its example "47.3° = Rohini pada 2" is really pada 3, because Rohini spans 40°–53°20′.
+
+## Options risk plan (client, Nov 15 2026)
+
+$250 of premium per trade. Stop at −20%. Targets at +40%, +75% and +100% of premium. See `src/lib/risk.ts` and its tests.
+Still to confirm: how contracts are split across the targets (currently thirds), strike and expiry, whether SELL buys puts, and whether the stop moves after target 1.

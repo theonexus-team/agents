@@ -7,7 +7,7 @@ export default function PaperPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-semibold">Paper trades <span className="ml-2 rounded bg-wait/15 px-2 py-0.5 text-[11px] text-wait">sample</span></h1>
-        <p className="text-[11px] text-muted">Long-only · $1,000 start · 25% of account per trade (fractional shares) · fills at the confirmed 2m close · auto-close at window end · times in ET</p>
+        <p className="text-[11px] text-muted">Options · $250 premium per trade · stop −20% · targets +40% / +75% / +100% · figures below are share-based sample data · auto-close at window end · times in ET</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-4">
         <Stat k="Account value" v={`$${P.value.toFixed(2)}`} sub={`from $${P.start.toFixed(2)}`} />
