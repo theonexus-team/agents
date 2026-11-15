@@ -1,38 +1,61 @@
 {
-  "_note": "PLACEHOLDER until the client's nakshatras.json arrives. Ruling planets (Vimshottari lords) and zodiac signs (standard sidereal spans; '/' = the nakshatra crosses into the next sign) are filled; element, sentiment, tone, sector impact and reference stocks come from the client's table. Replace this whole file with the client's table.",
   "nakshatras": [
     {
       "id": 1,
       "name": "Ashwini",
       "ruling_planet": "Ketu",
       "zodiac": "Aries",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Fire",
+      "sentiment": "Energetic, impulsive starts",
+      "tone": "Volatile",
+      "sector_impact": [
+        "EVs",
+        "Energy",
+        "Small Caps"
+      ],
+      "reference_stocks": [
+        "TSLA",
+        "NVDA",
+        "XOM",
+        "CVX"
+      ]
     },
     {
       "id": 2,
       "name": "Bharani",
       "ruling_planet": "Venus",
       "zodiac": "Aries",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Water",
+      "sentiment": "Intense, creative, value-seeking",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Luxury",
+        "Consumer"
+      ],
+      "reference_stocks": [
+        "COST",
+        "AMZN",
+        "NKE"
+      ]
     },
     {
       "id": 3,
       "name": "Krittika",
       "ruling_planet": "Sun",
-      "zodiac": "Aries / Taurus",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Aries/Taurus",
+      "element": "Fire",
+      "sentiment": "Aggressive, decisive",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Defense",
+        "Energy"
+      ],
+      "reference_stocks": [
+        "XOM",
+        "CVX",
+        "BA",
+        "PLTR"
+      ]
     },
     {
       "id": 4,
@@ -47,30 +70,50 @@
         "Real Estate"
       ],
       "reference_stocks": [
-        "AAPL"
+        "AAPL",
+        "MSFT",
+        "AMZN",
+        "GOOGL"
       ]
     },
     {
       "id": 5,
       "name": "Mrigashira",
       "ruling_planet": "Mars",
-      "zodiac": "Taurus / Gemini",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Taurus/Gemini",
+      "element": "Fire",
+      "sentiment": "Curious, momentum chaser",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Semiconductors",
+        "Fintech"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "AMD",
+        "AVGO",
+        "QCOM"
+      ]
     },
     {
       "id": 6,
       "name": "Ardra",
       "ruling_planet": "Rahu",
       "zodiac": "Gemini",
-      "element": null,
+      "element": "Air",
       "sentiment": "Disruptive, emotional",
       "tone": "Volatile",
-      "sector_impact": [],
-      "reference_stocks": []
+      "sector_impact": [
+        "AI",
+        "Cloud",
+        "Crypto"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "MU",
+        "MSFT",
+        "META"
+      ]
     },
     {
       "id": 7,
@@ -96,220 +139,378 @@
       "name": "Pushya",
       "ruling_planet": "Saturn",
       "zodiac": "Cancer",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Air",
+      "sentiment": "Defensive, structured",
+      "tone": "Calm",
+      "sector_impact": [
+        "Utilities",
+        "Insurance"
+      ],
+      "reference_stocks": [
+        "UNH",
+        "JNJ",
+        "PG",
+        "MRK"
+      ]
     },
     {
       "id": 9,
       "name": "Ashlesha",
       "ruling_planet": "Mercury",
       "zodiac": "Cancer",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Earth",
+      "sentiment": "Intricate, technical",
+      "tone": "Calm",
+      "sector_impact": [
+        "Software",
+        "Fintech"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "AAPL",
+        "MSFT"
+      ]
     },
     {
       "id": 10,
       "name": "Magha",
       "ruling_planet": "Ketu",
       "zodiac": "Leo",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Fire",
+      "sentiment": "Royal, leadership energy",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Large Cap Tech"
+      ],
+      "reference_stocks": [
+        "META",
+        "GOOGL",
+        "MSFT",
+        "AMZN"
+      ]
     },
     {
       "id": 11,
       "name": "Purva Phalguni",
       "ruling_planet": "Venus",
       "zodiac": "Leo",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Water",
+      "sentiment": "Relaxed, indulgent",
+      "tone": "Calm",
+      "sector_impact": [
+        "Consumer",
+        "Retail"
+      ],
+      "reference_stocks": [
+        "MCD",
+        "AMZN",
+        "PEP"
+      ]
     },
     {
       "id": 12,
       "name": "Uttara Phalguni",
       "ruling_planet": "Sun",
-      "zodiac": "Leo / Virgo",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Leo/Virgo",
+      "element": "Fire",
+      "sentiment": "Assertive but steady",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Financials",
+        "Insurance"
+      ],
+      "reference_stocks": [
+        "JPM",
+        "V",
+        "BAC",
+        "MS"
+      ]
     },
     {
       "id": 13,
       "name": "Hasta",
       "ruling_planet": "Moon",
       "zodiac": "Virgo",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Water",
+      "sentiment": "Reactive, emotional",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Tech",
+        "Healthcare"
+      ],
+      "reference_stocks": [
+        "AAPL",
+        "NVDA",
+        "UNH",
+        "MSFT"
+      ]
     },
     {
       "id": 14,
       "name": "Chitra",
       "ruling_planet": "Mars",
-      "zodiac": "Virgo / Libra",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Virgo/Libra",
+      "element": "Fire",
+      "sentiment": "Innovative, technical",
+      "tone": "Volatile",
+      "sector_impact": [
+        "AI",
+        "Cloud Infra"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "MU",
+        "NOW",
+        "CRM"
+      ]
     },
     {
       "id": 15,
       "name": "Swati",
       "ruling_planet": "Rahu",
       "zodiac": "Libra",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Air",
+      "sentiment": "Expansive, momentum",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Internet",
+        "Cloud"
+      ],
+      "reference_stocks": [
+        "META",
+        "AMZN",
+        "NFLX",
+        "GOOGL"
+      ]
     },
     {
       "id": 16,
       "name": "Vishakha",
       "ruling_planet": "Jupiter",
-      "zodiac": "Libra / Scorpio",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Libra/Scorpio",
+      "element": "Sky/Air",
+      "sentiment": "Focused, optimistic",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Growth",
+        "Biotech"
+      ],
+      "reference_stocks": [
+        "MSFT",
+        "AMZN",
+        "LLY",
+        "AMGN"
+      ]
     },
     {
       "id": 17,
       "name": "Anuradha",
       "ruling_planet": "Saturn",
       "zodiac": "Scorpio",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Air",
+      "sentiment": "Loyal, structured",
+      "tone": "Calm",
+      "sector_impact": [
+        "Utilities",
+        "Pharma"
+      ],
+      "reference_stocks": [
+        "UNH",
+        "JNJ",
+        "PG",
+        "MRK",
+        "LLY"
+      ]
     },
     {
       "id": 18,
       "name": "Jyeshtha",
       "ruling_planet": "Mercury",
       "zodiac": "Scorpio",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Earth",
+      "sentiment": "Analytical, reactive",
+      "tone": "Calm",
+      "sector_impact": [
+        "Tech",
+        "Finance"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "AAPL",
+        "MSFT"
+      ]
     },
     {
       "id": 19,
       "name": "Mula",
       "ruling_planet": "Ketu",
       "zodiac": "Sagittarius",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Fire",
+      "sentiment": "Transformative, intense",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Crypto",
+        "Energy"
+      ],
+      "reference_stocks": [
+        "TSLA",
+        "XOM",
+        "CVX",
+        "NVDA"
+      ]
     },
     {
       "id": 20,
       "name": "Purva Ashadha",
       "ruling_planet": "Venus",
       "zodiac": "Sagittarius",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Water",
+      "sentiment": "Optimistic, growth",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Luxury",
+        "Pharma"
+      ],
+      "reference_stocks": [
+        "LULU",
+        "COST",
+        "AMZN",
+        "NKE"
+      ]
     },
     {
       "id": 21,
       "name": "Uttara Ashadha",
       "ruling_planet": "Sun",
-      "zodiac": "Sagittarius / Capricorn",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Sagittarius/Capricorn",
+      "element": "Fire",
+      "sentiment": "Leadership, authority",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Large Cap Index"
+      ],
+      "reference_stocks": [
+        "MSFT",
+        "AAPL",
+        "NVDA",
+        "AMZN"
+      ]
     },
     {
       "id": 22,
       "name": "Shravana",
       "ruling_planet": "Moon",
       "zodiac": "Capricorn",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Water",
+      "sentiment": "Communicative, rhythmic",
+      "tone": "Calm",
+      "sector_impact": [
+        "Media",
+        "Tech"
+      ],
+      "reference_stocks": [
+        "GOOGL",
+        "NFLX",
+        "AAPL",
+        "MSFT"
+      ]
     },
     {
       "id": 23,
       "name": "Dhanishta",
       "ruling_planet": "Mars",
-      "zodiac": "Capricorn / Aquarius",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Capricorn/Aquarius",
+      "element": "Fire",
+      "sentiment": "Rhythmic, bold",
+      "tone": "Volatile",
+      "sector_impact": [
+        "AI",
+        "Robotics"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "MU",
+        "TSLA",
+        "AVGO"
+      ]
     },
     {
       "id": 24,
       "name": "Shatabhisha",
       "ruling_planet": "Rahu",
       "zodiac": "Aquarius",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Air",
+      "sentiment": "Contrarian, deep",
+      "tone": "Volatile",
+      "sector_impact": [
+        "Biotech",
+        "AI",
+        "Quantum"
+      ],
+      "reference_stocks": [
+        "NVDA",
+        "MSFT",
+        "AMGN",
+        "QCOM"
+      ]
     },
     {
       "id": 25,
       "name": "Purva Bhadrapada",
       "ruling_planet": "Jupiter",
-      "zodiac": "Aquarius / Pisces",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "zodiac": "Aquarius/Pisces",
+      "element": "Sky/Air",
+      "sentiment": "Transformational",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Fintech",
+        "Cloud"
+      ],
+      "reference_stocks": [
+        "AMZN",
+        "MSFT",
+        "CRM",
+        "V"
+      ]
     },
     {
       "id": 26,
       "name": "Uttara Bhadrapada",
       "ruling_planet": "Saturn",
       "zodiac": "Pisces",
-      "element": null,
-      "sentiment": null,
-      "tone": null,
-      "sector_impact": [],
-      "reference_stocks": []
+      "element": "Air",
+      "sentiment": "Stable, wise",
+      "tone": "Calm",
+      "sector_impact": [
+        "Utilities",
+        "Health"
+      ],
+      "reference_stocks": [
+        "UNH",
+        "JNJ",
+        "PG",
+        "MRK"
+      ]
     },
     {
       "id": 27,
       "name": "Revati",
       "ruling_planet": "Mercury",
       "zodiac": "Pisces",
-      "element": null,
+      "element": "Earth",
       "sentiment": "Compassionate, flowing",
       "tone": "Harmonious",
-      "sector_impact": [],
-      "reference_stocks": []
+      "sector_impact": [
+        "Consumer",
+        "Logistics"
+      ],
+      "reference_stocks": [
+        "COST",
+        "AMZN",
+        "JPM",
+        "V"
+      ]
     }
-  ]
+  ],
+  "_source": "Client's Nakshatra table (screenshot, Nov 15 2026), transcribed verbatim."
 }

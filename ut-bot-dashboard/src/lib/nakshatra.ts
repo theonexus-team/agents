@@ -96,7 +96,8 @@ export function snapshotFor(date: Date, ticker: string, sector: string, manualNa
     tone: row.tone,
     sector_impact: row.sector_impact,
     reference_match: row.reference_stocks.includes(ticker.toUpperCase()),
-    sector_match: !!sector && row.sector_impact.some((s) => s.toLowerCase() === sector.toLowerCase()),
+    // Word match, so the client's "Large Cap Tech" counts for a Tech symbol and "Cloud Infra" for Cloud.
+    sector_match: !!sector && row.sector_impact.some((s) => { const a = s.toLowerCase(), b = sector.toLowerCase(); return a === b || a.split(/[\s/]+/).includes(b) || b.split(/[\s/]+/).includes(a); }),
     nak_source: manualNakId ? "manual" : "auto",
   };
 }

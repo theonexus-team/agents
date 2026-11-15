@@ -35,7 +35,7 @@ npm run send-test-signal     # posts a sample UT payload to the local webhook (n
 
 ## Waiting on the client
 
-- `reference/nakshatras.json` is a **placeholder**. Swap in the client's table.
+- ~~`reference/nakshatras.json` placeholder~~ Done: the client's table (Nov 15 2026) is in. Sector matching is word-based ("Large Cap Tech" matches a Tech symbol).
 - `reference/ut_bot_dual_webhook.pine` (v1.5) is in. Its Key Value / ATR inputs are still placeholders (Setup 1 = 1.0 / 10, Setup 2 = 2.0 / 10).
 - Stocks 6–10 of the watchlist, the UT Bot settings, and the other open questions in SPEC.md.
 - Spec note: its example "47.3° = Rohini pada 2" is really pada 3, because Rohini spans 40°–53°20′.
