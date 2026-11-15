@@ -47,4 +47,11 @@ describe("session", () => {
     expect(windowAt(et("2026-11-16T11:02:00-05:00"))).toBe("midday");
     expect(windowAt(et("2026-11-16T16:00:00-05:00"))).toBe("power_hour");
   });
+
+  it("matches the Pine script's open-time sessions", () => {
+    expect(windowAt(et("2026-11-16T09:30:00-05:00"))).toBe("outside"); // bar opened 9:28, pre-market
+    expect(windowAt(et("2026-11-16T09:32:00-05:00"))).toBe("opening"); // first bar, opened 9:30
+    expect(windowAt(et("2026-11-16T15:00:00-05:00"))).toBe("midday"); // opened 14:58
+    expect(windowAt(et("2026-11-16T15:02:00-05:00"))).toBe("power_hour"); // opened 15:00
+  });
 });

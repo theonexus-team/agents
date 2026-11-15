@@ -146,14 +146,16 @@ export function getSessionState(now: Date = new Date()): SessionState {
   return closedState();
 }
 
-/** Which window (if any) a bar-close instant falls into. Used to tag signals and gate paper trades. */
+/** Which window (if any) a 2m bar-close instant falls into. Used to tag signals and gate paper trades. */
 export function windowAt(d: Date): "opening" | "power_hour" | "midday" | "outside" {
   if (!isTradingDay(d)) return "outside";
   const m = nyMinutes(d);
   const early = isEarlyClose(d);
-  if (m >= OPEN && m <= OPENING_END) return "opening";
-  if (!early && m >= POWER_START && m <= CLOSE) return "power_hour";
-  if (m > OPENING_END && m < (early ? EARLY_CLOSE : POWER_START)) return "midday";
+  // Matches the indicator: TradingView puts a bar in a session by its OPEN time,
+  // so by close time the windows are (start, end]: 9:32–11:00 and 15:02–16:00.
+  if (m > OPEN && m <= OPENING_END) return "opening";
+  if (!early && m > POWER_START && m <= CLOSE) return "power_hour";
+  if (m > OPENING_END && m <= (early ? EARLY_CLOSE : POWER_START)) return "midday";
   return "outside";
 }
 

@@ -1,0 +1,170 @@
+//@version=6
+// UT Bot Dual Setup — Webhook Edition (v1.5, Eastern time)
+// Setup 1 → BUY signals. Setup 2 → SELL signals. 2-minute chart. Confirmed bars only (no repaint).
+// All times are New York (ET). Signals show ONLY during the NY session, 9:30 AM–4:00 PM ET.
+// Chart: inside the trading windows (9:30–11:00, 3:00–4:00 ET) labels are solid and alerted;
+//        midday NY signals are faded (context only, never alerted). Nothing outside the session.
+// Alerts: ONE TradingView alert per symbol:
+//   Condition: this indicator → "Any alert() function call"
+//   Webhook URL: https://<your-app>/api/webhook/tradingview
+//   Message: leave as-is (the script builds the JSON)
+// Disable the alert in TradingView = no webhook = no dashboard signal, no paper trade, no push.
+indicator("UT Bot Dual Setup — Webhook", shorttitle = "UT Dual WH", overlay = true, max_labels_count = 500)
+
+// ───────── Inputs ─────────
+grpB = "Setup 1 — BUY"
+a1   = input.float(1.0, "Key Value (sensitivity)", step = 0.1, group = grpB)   // TODO: confirm client value
+c1   = input.int(10, "ATR Period", minval = 1, group = grpB)                   // TODO: confirm client value
+ha1  = input.bool(false, "Use Heikin Ashi source", group = grpB)
+
+grpS = "Setup 2 — SELL"
+a2   = input.float(2.0, "Key Value (sensitivity)", step = 0.1, group = grpS)   // TODO: confirm client value
+c2   = input.int(10, "ATR Period", minval = 1, group = grpS)                   // TODO: confirm client value
+ha2  = input.bool(false, "Use Heikin Ashi source", group = grpS)
+
+grpW = "Sessions (Eastern time)"
+sessNY     = input.session("0930-1600", "New York session (ET)", group = grpW)
+useWindows = input.bool(true, "Only ALERT inside trading windows", group = grpW)
+sessOpen   = input.session("0930-1100", "Opening window (ET)", group = grpW)
+sessPower  = input.session("1500-1600", "Power hour (ET)", group = grpW)
+shadeWin   = input.bool(true, "Shade windows on chart", group = grpW)
+
+grpV = "Display"
+showOutside = input.bool(true, "Show midday NY signals (faded, no alert)", group = grpV)
+showStops   = input.bool(true, "Show trailing stop lines", group = grpV)
+colorBars   = input.bool(false, "Color the signal bar", group = grpV)
+showPanel   = input.bool(true, "Show status panel", group = grpV)
+buyCol      = input.color(#16A34A, "Buy color", group = grpV)
+sellCol     = input.color(#DC2626, "Sell color", group = grpV)
+
+grpH = "Webhook"
+secret    = input.string("", "Shared secret (must match dashboard WEBHOOK_SECRET)", group = grpH)
+enforce2m = input.bool(true, "Only alert on the 2-minute timeframe", group = grpH)
+
+// ───────── Sources ─────────
+haClose = request.security(ticker.heikinashi(syminfo.tickerid), timeframe.period, close, lookahead = barmerge.lookahead_off)
+src1 = ha1 ? haClose : close
+src2 = ha2 ? haClose : close
+
+// ───────── UT Bot core (ATR trailing stop) ─────────
+utStop(float src, float keyValue, int atrLen) =>
+    float nLoss = keyValue * ta.atr(atrLen)
+    var float trail = na
+    float prev = nz(trail[1])
+    trail := src > prev and src[1] > prev ? math.max(prev, src - nLoss) :
+             src < prev and src[1] < prev ? math.min(prev, src + nLoss) :
+             src > prev ? src - nLoss : src + nLoss
+    trail
+
+stop1 = utStop(src1, a1, c1)
+stop2 = utStop(src2, a2, c2)
+atr1  = ta.atr(c1)   // computed every bar (used in the webhook payload)
+atr2  = ta.atr(c2)
+
+// Crosses computed on every bar (Pine v6 evaluates `and` lazily, so keep ta.* calls outside conditions)
+xUp1 = ta.crossover(src1, stop1)
+xDn2 = ta.crossunder(src2, stop2)
+
+// UT Bot rule: 1-period EMA (= source) crosses the trailing stop
+buyRaw  = xUp1 and src1 > stop1 and barstate.isconfirmed
+sellRaw = xDn2 and src2 < stop2 and barstate.isconfirmed
+
+// ───────── Windows ─────────
+inNY    = not na(time(timeframe.period, sessNY, "America/New_York"))
+inOpen  = inNY and not na(time(timeframe.period, sessOpen, "America/New_York"))
+inPower = inNY and not na(time(timeframe.period, sessPower, "America/New_York"))
+inWin   = inOpen or inPower
+tfOk    = not enforce2m or timeframe.period == "2"
+canAlert = inNY and (not useWindows or inWin) and tfOk
+
+windowName = inOpen ? "opening" : inPower ? "power_hour" : "midday"
+fadedWhy   = " | midday, no alert"
+
+// ───────── JSON payload ─────────
+// Includes the settings that produced the signal, so paper results can be compared by setting later.
+// Nakshatra/sentiment are NOT computed here: the dashboard tags each signal from bar_close_time,
+// so there is one source of truth for the Moon position.
+f_json(string side, string setup, float keyV, int atrLen, bool useHa, float stopLvl, float atrVal) =>
+    '{"secret":"' + secret +
+     '","ticker":"' + syminfo.ticker +
+     '","exchange":"' + syminfo.prefix +
+     '","side":"' + side +
+     '","setup":"' + setup +
+     '","price":' + str.tostring(close, format.mintick) +
+     ',"tf":"' + timeframe.period +
+     '","bar_time":' + str.tostring(time) +
+     ',"bar_close_time":' + str.tostring(time_close) +
+     ',"window":"' + windowName +
+     '","ut_key":' + str.tostring(keyV) +
+     ',"ut_atr_len":' + str.tostring(atrLen) +
+     ',"ut_heikin":' + (useHa ? "true" : "false") +
+     ',"ut_stop":' + str.tostring(stopLvl, format.mintick) +
+     ',"atr":' + str.tostring(atrVal, format.mintick) +
+     ',"source":"tv_ut_dual_v1.5"}'
+
+if buyRaw and canAlert
+    alert(f_json("BUY", "UT1", a1, c1, ha1, stop1, atr1), alert.freq_once_per_bar_close)
+if sellRaw and canAlert
+    alert(f_json("SELL", "UT2", a2, c2, ha2, stop2, atr2), alert.freq_once_per_bar_close)
+
+// Classic alerts (push-only, no dashboard) — same window filter
+buyAlertable  = buyRaw and canAlert
+sellAlertable = sellRaw and canAlert
+alertcondition(buyAlertable,  "UT Bot Buy (Setup 1)",  "UT BUY {{ticker}} @ {{close}} ({{interval}}m)")
+alertcondition(sellAlertable, "UT Bot Sell (Setup 2)", "UT SELL {{ticker}} @ {{close}} ({{interval}}m)")
+
+// ───────── Chart signals ─────────
+showBuy  = buyRaw  and inNY and (inWin or showOutside or not useWindows)
+showSell = sellRaw and inNY and (inWin or showOutside or not useWindows)
+solidBuy  = inWin or not useWindows
+solidSell = inWin or not useWindows
+
+if showBuy
+    label.new(bar_index, low, "BUY", yloc = yloc.belowbar, style = label.style_label_up,
+              color = solidBuy ? buyCol : color.new(buyCol, 65),
+              textcolor = solidBuy ? color.white : color.new(color.white, 30), size = size.small,
+              tooltip = "UT Setup 1 BUY | " + str.format_time(time_close, "h:mm a", "America/New_York") + " ET" + (solidBuy ? "" : fadedWhy))
+
+if showSell
+    label.new(bar_index, high, "SELL", yloc = yloc.abovebar, style = label.style_label_down,
+              color = solidSell ? sellCol : color.new(sellCol, 65),
+              textcolor = solidSell ? color.white : color.new(color.white, 30), size = size.small,
+              tooltip = "UT Setup 2 SELL | " + str.format_time(time_close, "h:mm a", "America/New_York") + " ET" + (solidSell ? "" : fadedWhy))
+
+plot(showStops ? stop1 : na, "UT1 trailing stop (Buy)",  color = color.new(buyCol, 40),  linewidth = 1)
+plot(showStops ? stop2 : na, "UT2 trailing stop (Sell)", color = color.new(sellCol, 40), linewidth = 1)
+barcolor(colorBars and showBuy ? buyCol : colorBars and showSell ? sellCol : na, title = "Signal bar")
+bgcolor(shadeWin and inOpen  ? color.new(color.green, 92) : na, title = "Opening window")
+bgcolor(shadeWin and inPower ? color.new(color.blue, 92)  : na, title = "Power hour")
+
+// ───────── Status panel (top right) ─────────
+var float lastBuyPx  = na
+var int   lastBuyT   = na
+var float lastSellPx = na
+var int   lastSellT  = na
+if buyRaw and inNY
+    lastBuyPx := close
+    lastBuyT  := time_close
+if sellRaw and inNY
+    lastSellPx := close
+    lastSellT  := time_close
+
+var table panel = table.new(position.top_right, 2, 5, bgcolor = color.new(#0B0F14, 10), border_color = color.new(#222B36, 0), border_width = 1, frame_color = color.new(#222B36, 0), frame_width = 1)
+
+f_t(int t) => na(t) ? "—" : str.format_time(t, "MMM d h:mm a", "America/New_York") + " ET"
+
+if showPanel and barstate.islast
+    winTxt = inOpen ? "OPENING" : inPower ? "POWER HOUR" : inNY ? "MIDDAY" : "CLOSED"
+    winCol = inWin ? color.new(#16A34A, 0) : color.new(#94A3B8, 0)
+    lastSide = na(lastBuyT) and na(lastSellT) ? "—" : na(lastSellT) ? "BUY" : na(lastBuyT) ? "SELL" : lastBuyT > lastSellT ? "BUY" : "SELL"
+    sideCol = lastSide == "BUY" ? buyCol : lastSide == "SELL" ? sellCol : color.gray
+    table.cell(panel, 0, 0, "UT Dual · " + syminfo.ticker, text_color = color.white, text_size = size.small)
+    table.cell(panel, 1, 0, timeframe.period + "m", text_color = tfOk ? color.white : color.orange, text_size = size.small)
+    table.cell(panel, 0, 1, "Window", text_color = color.silver, text_size = size.small)
+    table.cell(panel, 1, 1, winTxt, text_color = winCol, text_size = size.small)
+    table.cell(panel, 0, 2, "Latest signal", text_color = color.silver, text_size = size.small)
+    table.cell(panel, 1, 2, lastSide, text_color = color.white, bgcolor = color.new(sideCol, 40), text_size = size.small)
+    table.cell(panel, 0, 3, "Last BUY",  text_color = color.silver, text_size = size.small)
+    table.cell(panel, 1, 3, na(lastBuyPx)  ? "—" : str.tostring(lastBuyPx, format.mintick)  + " · " + f_t(lastBuyT),  text_color = buyCol,  text_size = size.small)
+    table.cell(panel, 0, 4, "Last SELL", text_color = color.silver, text_size = size.small)
+    table.cell(panel, 1, 4, na(lastSellPx) ? "—" : str.tostring(lastSellPx, format.mintick) + " · " + f_t(lastSellT), text_color = sellCol, text_size = size.small)
