@@ -144,5 +144,10 @@ insert into symbols (ticker, yahoo_symbol, sector, kind, is_primary, sort_order,
   ('TSLA','TSLA','Auto','stock',false,11,true),
   ('META','META','Tech','stock',false,12,true),
   ('AMZN','AMZN','Cloud','stock',false,13,true),
-  ('MU','MU','Semiconductors','stock',false,14,true)
+  ('MU','MU','Semiconductors','stock',false,14,true),
+  ('AVGO','AVGO','Semiconductors','stock',false,15,true),
+  ('CRWD','CRWD','Software','stock',false,16,true),
+  ('GOOGL','GOOGL','Tech','stock',false,17,true),
+  ('MSFT','MSFT','Tech','stock',false,18,true),
+  ('NVDA','NVDA','Semiconductors','stock',false,19,true)
 on conflict (ticker) do nothing;

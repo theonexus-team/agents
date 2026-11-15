@@ -13,8 +13,7 @@ export interface WatchSymbol {
 }
 
 /**
- * The 16 tickers from the spec. Stocks 6–10 are placeholders until the client
- * sends the rest of the watchlist (open question #2). Mirrors the seed in
+ * The client's 16 tickers (matches their TradingView alert list, Nov 15 2026). Mirrors the seed in
  * supabase/migrations/0001_init.sql — once Supabase is connected the DB is the
  * source of truth and this list is only the fallback.
  */
@@ -30,16 +29,11 @@ export const SYMBOLS: WatchSymbol[] = [
   { ticker: "META", yahooSymbol: "META", sector: "Tech", kind: "stock", isPrimary: false, sortOrder: 12, tradeable: true },
   { ticker: "AMZN", yahooSymbol: "AMZN", sector: "Cloud", kind: "stock", isPrimary: false, sortOrder: 13, tradeable: true },
   { ticker: "MU", yahooSymbol: "MU", sector: "Semiconductors", kind: "stock", isPrimary: false, sortOrder: 14, tradeable: true },
-  ...[6, 7, 8, 9, 10].map((n, i) => ({
-    ticker: `STOCK${n}`,
-    yahooSymbol: "",
-    sector: "",
-    kind: "stock" as const,
-    isPrimary: false,
-    sortOrder: 15 + i,
-    tradeable: false,
-    placeholder: true,
-  })),
+  { ticker: "AVGO", yahooSymbol: "AVGO", sector: "Semiconductors", kind: "stock", isPrimary: false, sortOrder: 15, tradeable: true },
+  { ticker: "CRWD", yahooSymbol: "CRWD", sector: "Software", kind: "stock", isPrimary: false, sortOrder: 16, tradeable: true },
+  { ticker: "GOOGL", yahooSymbol: "GOOGL", sector: "Tech", kind: "stock", isPrimary: false, sortOrder: 17, tradeable: true },
+  { ticker: "MSFT", yahooSymbol: "MSFT", sector: "Tech", kind: "stock", isPrimary: false, sortOrder: 18, tradeable: true },
+  { ticker: "NVDA", yahooSymbol: "NVDA", sector: "Semiconductors", kind: "stock", isPrimary: false, sortOrder: 19, tradeable: true },
 ];
 
 export const TRADINGVIEW_TICKER_ALIASES: Record<string, string> = { CL1: "CL1!", "CL1!": "CL1!", VIX: "VIX" };
