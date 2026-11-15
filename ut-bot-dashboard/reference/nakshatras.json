@@ -1,0 +1,315 @@
+{
+  "_note": "PLACEHOLDER until the client's nakshatras.json arrives. Ruling planets are the standard Vimshottari lords; the only other filled values are the examples shown in the spec/prototype. Replace this whole file with the client's table.",
+  "nakshatras": [
+    {
+      "id": 1,
+      "name": "Ashwini",
+      "ruling_planet": "Ketu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 2,
+      "name": "Bharani",
+      "ruling_planet": "Venus",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 3,
+      "name": "Krittika",
+      "ruling_planet": "Sun",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 4,
+      "name": "Rohini",
+      "ruling_planet": "Moon",
+      "zodiac": "Taurus",
+      "element": "Water",
+      "sentiment": "Stable, growth-oriented",
+      "tone": "Calm",
+      "sector_impact": [
+        "Tech",
+        "Real Estate"
+      ],
+      "reference_stocks": [
+        "AAPL"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Mrigashira",
+      "ruling_planet": "Mars",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 6,
+      "name": "Ardra",
+      "ruling_planet": "Rahu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": "Disruptive, emotional",
+      "tone": "Volatile",
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 7,
+      "name": "Punarvasu",
+      "ruling_planet": "Jupiter",
+      "zodiac": "Gemini/Cancer",
+      "element": "Sky/Space",
+      "sentiment": "Expansion, balance",
+      "tone": "Harmonious",
+      "sector_impact": [
+        "Cloud",
+        "Healthcare"
+      ],
+      "reference_stocks": [
+        "MSFT",
+        "AMZN",
+        "UNH",
+        "JNJ"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Pushya",
+      "ruling_planet": "Saturn",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 9,
+      "name": "Ashlesha",
+      "ruling_planet": "Mercury",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 10,
+      "name": "Magha",
+      "ruling_planet": "Ketu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 11,
+      "name": "Purva Phalguni",
+      "ruling_planet": "Venus",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 12,
+      "name": "Uttara Phalguni",
+      "ruling_planet": "Sun",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 13,
+      "name": "Hasta",
+      "ruling_planet": "Moon",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 14,
+      "name": "Chitra",
+      "ruling_planet": "Mars",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 15,
+      "name": "Swati",
+      "ruling_planet": "Rahu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 16,
+      "name": "Vishakha",
+      "ruling_planet": "Jupiter",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 17,
+      "name": "Anuradha",
+      "ruling_planet": "Saturn",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 18,
+      "name": "Jyeshtha",
+      "ruling_planet": "Mercury",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 19,
+      "name": "Mula",
+      "ruling_planet": "Ketu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 20,
+      "name": "Purva Ashadha",
+      "ruling_planet": "Venus",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 21,
+      "name": "Uttara Ashadha",
+      "ruling_planet": "Sun",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 22,
+      "name": "Shravana",
+      "ruling_planet": "Moon",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 23,
+      "name": "Dhanishta",
+      "ruling_planet": "Mars",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 24,
+      "name": "Shatabhisha",
+      "ruling_planet": "Rahu",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 25,
+      "name": "Purva Bhadrapada",
+      "ruling_planet": "Jupiter",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 26,
+      "name": "Uttara Bhadrapada",
+      "ruling_planet": "Saturn",
+      "zodiac": null,
+      "element": null,
+      "sentiment": null,
+      "tone": null,
+      "sector_impact": [],
+      "reference_stocks": []
+    },
+    {
+      "id": 27,
+      "name": "Revati",
+      "ruling_planet": "Mercury",
+      "zodiac": null,
+      "element": null,
+      "sentiment": "Compassionate, flowing",
+      "tone": "Harmonious",
+      "sector_impact": [],
+      "reference_stocks": []
+    }
+  ]
+}

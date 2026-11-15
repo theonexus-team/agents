@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0e13;
+  --color-panel: #11151c;
+  --color-panel-2: #161b24;
+  --color-line: #1f2632;
+  --color-muted: #7d8696;
+  --color-text: #e6e9ef;
+  --color-buy: #3fcf6e;
+  --color-sell: #f0545c;
+  --color-wait: #e8a33a;
+  --color-news: #a78bfa;
+  --color-info: #5b9cf5;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+}
+
+html, body { background: var(--color-bg); color: var(--color-text); }
+body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.card { background: var(--color-panel); border: 1px solid var(--color-line); border-radius: 12px; }
+.label { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--color-muted); }
