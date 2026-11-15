@@ -2,32 +2,42 @@ import Dashboard from "@/components/Dashboard";
 import SessionTimer from "@/components/SessionTimer";
 import { SYMBOLS } from "@/lib/symbols";
 import { NAKSHATRAS, NAKSHATRA_TABLE_IS_PLACEHOLDER, moonNakshatra } from "@/lib/nakshatra";
-import { sampleSignals, sampleQuotes, sampleBars, sampleClock, SAMPLE_ECON, SAMPLE_PAPER } from "@/lib/sample";
+import { sampleSignals, sampleClock, SAMPLE_ECON } from "@/lib/sample";
+import { getQuotes, getBars } from "@/lib/marketData";
+import { todaysEvents } from "@/lib/econCalendar";
+import { paperSummary } from "@/lib/paper";
 import { listSignals, lastWebhookAt } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
   const real = listSignals();
   const sampleMode = real.length === 0;
   const refNow = sampleMode ? sampleClock().getTime() : Date.now();
   const signals = sampleMode ? sampleSignals(refNow) : real;
-  const bars = Object.fromEntries(["QQQ", "SMH"].map((t) => [t, sampleBars(t).map((b) => b.close)]));
+  const [{ quotes }, econ, ...barSets] = await Promise.all([getQuotes(), todaysEvents(), ...["QQQ", "SMH"].map((t) => getBars(t))]);
+  const bars = Object.fromEntries(["QQQ", "SMH"].map((t, i) => [t, barSets[i].bars.slice(-60).map((b) => b.close)]));
+  const marks = Object.fromEntries(quotes.map((q) => [q.ticker, q.price]));
+  const ps = paperSummary(marks);
+  // Same shape the dashboard card already uses.
+  const paper = { start: ps.start, value: ps.value, realized: ps.realized, open: ps.open, winRate: ps.winRate, closed: ps.closed, wins: ps.wins, avgWin: ps.avgWin, avgLoss: ps.avgLoss,
+    positions: ps.positions.map((p) => ({ ticker: p.ticker, qty: p.qty, entry: p.entry_price, window: p.window === "power_hour" ? "Power hour" : "Opening", pnl: p.pnl })),
+    byTone: ps.byTone.map((t) => ({ tone: t.key, pnl: t.pnl, trades: t.trades, win: t.win })) };
   return (
     <div className="space-y-4">
       <SessionTimer lastWebhook={lastWebhookAt()} />
       <Dashboard
         signals={signals}
         symbols={SYMBOLS}
-        quotes={sampleQuotes()}
+        quotes={quotes}
         bars={bars}
         nakshatras={NAKSHATRAS}
         autoNakId={moonNakshatra(new Date()).nakId}
         nakPlaceholder={NAKSHATRA_TABLE_IS_PLACEHOLDER}
         refNow={refNow}
         sampleMode={sampleMode}
-        econ={SAMPLE_ECON}
-        paper={SAMPLE_PAPER}
+        econ={econ.source === "none" ? SAMPLE_ECON : econ.rows}
+        paper={paper}
       />
     </div>
   );

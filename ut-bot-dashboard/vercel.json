@@ -1,0 +1,7 @@
+{
+  "crons": [
+    { "path": "/api/cron/window-end", "schedule": "0 15,16 * * 1-5" },
+    { "path": "/api/cron/window-end", "schedule": "0 17,18 * * 1-5" },
+    { "path": "/api/cron/window-end", "schedule": "0 20,21 * * 1-5" }
+  ]
+}

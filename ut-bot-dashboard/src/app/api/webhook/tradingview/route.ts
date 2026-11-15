@@ -1,3 +1,6 @@
+import { newsStateAt } from "@/lib/econCalendar";
+import { applySignal } from "@/lib/paper";
+import { getQuotes } from "@/lib/marketData";
 import { NextResponse, after } from "next/server";
 import { findSymbol } from "@/lib/symbols";
 import { windowAt } from "@/lib/session";
@@ -60,19 +63,23 @@ export async function POST(req: Request) {
     ut_heikin: typeof body.ut_heikin === "boolean" ? body.ut_heikin : null,
     ut_stop: num(body.ut_stop),
     atr: num(body.atr),
-    // News filter not connected yet — every signal is "clear" until lib/econCalendar.ts lands.
-    news_state: "clear",
-    nearest_event: null,
-    minutes_to_event: null,
+    // News filter (Forex Factory, USD): High impact ±10 min blocks new entries; exits always go through.
+    ...(await newsStateAt(new Date(barClose))),
     ...snapshotFor(new Date(barClose), sym.ticker, sym.sector),
   };
+
+  if (signal.status === "accepted" && signal.side === "BUY" && signal.news_state === "blackout") signal.status = "blocked_news";
 
   // 5–6. De-duplicate + insert. (In-memory until Supabase is connected.)
   const inserted = insertSignal(signal);
   if (!inserted) return NextResponse.json({ ok: true, duplicate: true });
 
   after(async () => {
-    // TODO(paper engine): open/close paper position per lib/paper.ts rules.
+    // Paper engine: BUYs only when accepted; SELLs always close an open long (exits never blocked).
+    if (sym.tradeable) {
+      const { quotes } = await getQuotes();
+      applySignal(signal, Object.fromEntries(quotes.map((q) => [q.ticker, q.price])));
+    }
     // TODO(push): sendPush() for signals inside a window, write alerts_log.
     // TODO(supabase): persist when isSupabaseConfigured().
     void isSupabaseConfigured;

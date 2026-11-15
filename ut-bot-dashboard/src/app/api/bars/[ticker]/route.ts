@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { sampleBars } from "@/lib/sample";
+import { getBars } from "@/lib/marketData";
 
-// Not connected yet: returns a synthetic 2m series. lib/marketData.ts (yahoo chart(), 60 s cache) replaces this.
+// Live Yahoo 2m bars (60 s cache); falls back to a synthetic series if Yahoo is unreachable.
 export async function GET(_req: Request, ctx: { params: Promise<{ ticker: string }> }) {
   const { ticker } = await ctx.params;
-  return NextResponse.json({ source: "sample", ticker, bars: sampleBars(decodeURIComponent(ticker)) });
+  const t = decodeURIComponent(ticker);
+  const { source, bars } = await getBars(t);
+  return NextResponse.json({ source, ticker: t, bars });
 }

@@ -3,7 +3,7 @@
 TradingView UT Bot signals (16 symbols, 2m, NY session) → webhook → paper trading + phone push.
 Full spec: [SPEC.md](SPEC.md) (text export of the build spec PDF).
 
-**Status: setup mode.** The app runs on sample data. No outside service is called yet.
+**Status: live (no database yet).** Live Yahoo prices/bars, Forex Factory calendar + news filter, paper engine and window-end cron are wired. Signals and paper trades are kept in server memory until Supabase is connected (lost on restart).
 Open **/setup** (the "Accounts" tab) for each account to sign in to and the values to collect.
 
 ## Run locally
@@ -24,10 +24,14 @@ npm run send-test-signal     # posts a sample UT payload to the local webhook (n
 | Layout: header, session timer, econ calendar, Nakshatra panel, focus cards, ETF/stock tables, selected signal, phone preview, paper account | Built, sample data |
 | `lib/session.ts`: ET windows, DST, weekends, NYSE holidays, early closes | Built + tested |
 | `lib/nakshatra.ts`: Moon sidereal longitude (astronomy-engine, Lahiri) → nakshatra/pada | Built + tested. Still needs checking against a published panchang |
-| `POST /api/webhook/tradingview`: JSON parse, secret, watchlist/side/tf, optional IP check, de-dupe, Nakshatra tag | Built. Stores in memory until Supabase is connected |
+| `POST /api/webhook/tradingview`: JSON parse, secret, watchlist/side/tf, optional IP check, de-dupe, Nakshatra tag, news filter (High ±10 min blocks BUYs), paper engine | Built. Stores in memory until Supabase is connected |
 | Login (single password, `src/proxy.ts`) | Built |
 | `supabase/migrations/0001_init.sql`: 7 tables, unique index, Realtime, RLS, seed | Written, not applied |
-| Paper engine, push senders, Yahoo market data, econ calendar sync, window-end cron | Stubs (return sample data or 503) |
+| `lib/marketData.ts`: Yahoo quotes (15 s cache) + 2m bars (60 s), sample fallback | Built |
+| `lib/econCalendar.ts`: Forex Factory weekly feed (USD), today's events panel, blackout check | Built |
+| `lib/paper.ts`: long-only, 25% of equity per trade, fractional shares, window-end auto-close, stats, reset | Built + tested (in memory) |
+| `/api/cron/window-end` + `vercel.json` crons (UTC hours covering EST/EDT and early closes) | Built |
+| Push senders | Not wired (client chose to skip for now; TradingView's own app push works) |
 
 ## Waiting on the client
 

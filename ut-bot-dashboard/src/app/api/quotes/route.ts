@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { sampleQuotes } from "@/lib/sample";
+import { getQuotes } from "@/lib/marketData";
 
-// Not connected yet: returns sample prices. lib/marketData.ts (yahoo-finance2, 15 s cache) replaces this.
-export function GET(req: Request) {
+// Live Yahoo quotes (15 s cache); falls back to sample prices if Yahoo is unreachable.
+export async function GET(req: Request) {
   const symbols = (new URL(req.url).searchParams.get("symbols") || "").split(",").filter(Boolean);
-  const all = sampleQuotes();
-  return NextResponse.json({ source: "sample", asOf: new Date().toISOString(), quotes: symbols.length ? all.filter((q) => symbols.includes(q.ticker)) : all });
+  const { source, quotes } = await getQuotes();
+  return NextResponse.json({ source, asOf: new Date().toISOString(), quotes: symbols.length ? quotes.filter((q) => symbols.includes(q.ticker)) : quotes });
 }
