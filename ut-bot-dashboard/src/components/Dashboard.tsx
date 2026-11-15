@@ -152,7 +152,7 @@ export default function Dashboard(p: Props) {
               <div className="text-sm leading-snug">
                 <div className="font-semibold">{sel.ticker} | UT {sel.side}{sel.status === "blocked_news" ? ` | BLOCKED — ${sel.nearest_event}` : ""} | 2m</div>
                 <div>{et(sel.bar_close_time)} ET | Confirmed close {usd(sel.price)}</div>
-                <div className="text-muted">{sel.window === "opening" ? "Opening session" : sel.window === "power_hour" ? "Power hour" : "Outside window — no push"} | Paper trading</div>
+                <div className="text-muted">{sel.window === "pre_market" ? "Pre-market" : sel.window === "opening" ? "Opening session" : sel.window === "power_hour" ? "Power hour" : "Outside window — no push"} | Paper trading</div>
               </div>
             </div>
           ) : null}

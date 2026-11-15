@@ -22,7 +22,9 @@ export async function getQuotes(): Promise<{ source: "yahoo" | "sample"; quotes:
     const quotes: Quote[] = live.flatMap((s) => {
       const q = arr.find((x) => x.symbol === s.yahooSymbol);
       if (!q || q.regularMarketPrice == null) return [];
-      return [{ ticker: s.ticker, price: q.regularMarketPrice, change: q.regularMarketChange ?? 0, changePct: q.regularMarketChangePercent ?? 0 }];
+      // Pre-market (7:00–9:30): use the pre-market price when Yahoo has one.
+      const pre = q.marketState === "PRE" && q.preMarketPrice != null;
+      return [{ ticker: s.ticker, price: pre ? q.preMarketPrice! : q.regularMarketPrice, change: pre ? (q.preMarketChange ?? 0) : (q.regularMarketChange ?? 0), changePct: pre ? (q.preMarketChangePercent ?? 0) : (q.regularMarketChangePercent ?? 0) }];
     });
     if (!quotes.length) throw new Error("no quotes");
     g.__utQuotes = { at: Date.now(), data: quotes };

@@ -20,14 +20,15 @@ export const MARKET_HOLIDAYS: string[] = [
 export const EARLY_CLOSES: string[] = ["2026-11-27", "2026-12-24", "2027-11-26"];
 
 const MIN = 60_000;
+const PRE_START = 7 * 60; // pre-market monitoring + trading window starts 7:00 AM ET
 const OPEN = 9 * 60 + 30;
 const OPENING_END = 11 * 60;
 const POWER_START = 15 * 60;
 const CLOSE = 16 * 60;
 const EARLY_CLOSE = 13 * 60;
 
-export type Phase = "pre" | "opening" | "midday" | "power" | "closed";
-export type TradingWindow = "opening" | "power_hour" | null;
+export type Phase = "pre" | "premarket" | "opening" | "midday" | "power" | "closed";
+export type TradingWindow = "pre_market" | "opening" | "power_hour" | null;
 
 export interface SessionState {
   phase: Phase;
@@ -40,7 +41,7 @@ export interface SessionState {
   /** UTC instant of the next opening bell (only meaningful when pre/closed) */
   nextOpen: Date;
   label: string;
-  /** 0–1 progress across 9:30–16:00 (clamped) for the timer bar */
+  /** 0–1 progress across 7:00–16:00 (clamped) for the timer bar */
   dayProgress: number;
 }
 
@@ -99,7 +100,7 @@ export function getSessionState(now: Date = new Date()): SessionState {
   const close = early ? EARLY_CLOSE : CLOSE;
   const mins = nyMinutes(now);
   const nextOpen = nextOpenAfter(now);
-  const dayProgress = Math.min(1, Math.max(0, (mins - OPEN) / (CLOSE - OPEN)));
+  const dayProgress = Math.min(1, Math.max(0, (mins - PRE_START) / (CLOSE - PRE_START)));
   const until = (m: number) => atNy(key, m).getTime() - now.getTime();
 
   const closedState = (): SessionState => {
@@ -113,16 +114,20 @@ export function getSessionState(now: Date = new Date()): SessionState {
       earlyClose: early,
       msLeft: nextOpen.getTime() - now.getTime(),
       nextOpen,
-      label: sameDay ? `NY opens in ${fmtDuration(nextOpen.getTime() - now.getTime())}` : `Market closed — opens ${day} 9:30 AM ET`,
+      label: sameDay ? `NY opens in ${fmtDuration(nextOpen.getTime() - now.getTime())}` : `Market closed — monitoring resumes ${day} 7:00 AM ET`,
       dayProgress: z && trading && mins >= close ? 1 : 0,
     };
   };
 
   if (!trading) return closedState();
 
+  if (mins < PRE_START) {
+    const ms = until(PRE_START);
+    return { phase: "pre", window: null, alertsLive: false, earlyClose: early, msLeft: ms, nextOpen, label: `Pre-market monitoring starts 7:00 AM ET (in ${fmtDuration(ms)})`, dayProgress: 0 };
+  }
   if (mins < OPEN) {
     const ms = until(OPEN);
-    return { phase: "pre", window: null, alertsLive: false, earlyClose: early, msLeft: ms, nextOpen, label: `NY opens in ${fmtDuration(ms)}`, dayProgress: 0 };
+    return { phase: "premarket", window: "pre_market", alertsLive: true, earlyClose: early, msLeft: ms, nextOpen, label: `PRE-MARKET — NY opens in ${fmtDuration(ms)}`, dayProgress };
   }
   if (mins < OPENING_END) {
     const ms = until(OPENING_END);
@@ -147,23 +152,24 @@ export function getSessionState(now: Date = new Date()): SessionState {
 }
 
 /** Which window (if any) a 2m bar-close instant falls into. Used to tag signals and gate paper trades. */
-export function windowAt(d: Date): "opening" | "power_hour" | "midday" | "outside" {
+export function windowAt(d: Date): "pre_market" | "opening" | "power_hour" | "midday" | "outside" {
   if (!isTradingDay(d)) return "outside";
   const m = nyMinutes(d);
   const early = isEarlyClose(d);
   // Matches the indicator: TradingView puts a bar in a session by its OPEN time,
   // so by close time the windows are (start, end]: 9:32–11:00 and 15:02–16:00.
+  if (m > PRE_START && m <= OPEN) return "pre_market"; // bars 7:00–9:30 (by open time) → close 7:02–9:30
   if (m > OPEN && m <= OPENING_END) return "opening";
   if (!early && m > POWER_START && m <= CLOSE) return "power_hour";
   if (m > OPENING_END && m <= (early ? EARLY_CLOSE : POWER_START)) return "midday";
   return "outside";
 }
 
-/** Window-end instants (ET) for a given trading day: 11:00 and 16:00, or 11:00 and 13:00 on early-close days. */
+/** Window-end instants (ET) for a given trading day: 9:30 (pre-market end), 11:00 and 16:00 (13:00 on early-close days). */
 export function windowEnds(d: Date): Date[] {
   if (!isTradingDay(d)) return [];
   const key = nyDateKey(d);
-  return [atNy(key, OPENING_END), atNy(key, isEarlyClose(d) ? EARLY_CLOSE : CLOSE)];
+  return [atNy(key, OPEN), atNy(key, OPENING_END), atNy(key, isEarlyClose(d) ? EARLY_CLOSE : CLOSE)];
 }
 
 export function fmtEt(d: Date, pattern = "h:mm a"): string {

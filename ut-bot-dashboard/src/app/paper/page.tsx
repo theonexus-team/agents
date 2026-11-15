@@ -5,7 +5,7 @@ import ResetButton from "./ResetButton";
 
 export const dynamic = "force-dynamic";
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`;
-const winLabel = (w: string) => (w === "power_hour" ? "Power hour" : w === "opening" ? "Opening" : w);
+const winLabel = (w: string) => (w === "power_hour" ? "Power hour" : w === "opening" ? "Opening" : w === "pre_market" ? "Pre-market" : w);
 
 export default async function PaperPage() {
   const { quotes } = await getQuotes();
@@ -15,7 +15,7 @@ export default async function PaperPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Paper trades</h1>
-          <p className="text-[11px] text-muted">Long-only · BUY opens, SELL closes · {P.settings.size_value}% of account per trade, fractional shares · auto-close at window end (11:00 AM / 4:00 PM ET) · fills at the signal price · kept in memory until the database is connected</p>
+          <p className="text-[11px] text-muted">Long-only · BUY opens, SELL closes · {P.settings.size_value}% of account per trade, fractional shares · windows: pre-market 7:00–9:30, opening 9:30–11:00, power hour 3:00–4:00 PM ET · auto-close at each window end · fills at the signal price · kept in memory until the database is connected</p>
         </div>
         <ResetButton start={P.start} />
       </div>

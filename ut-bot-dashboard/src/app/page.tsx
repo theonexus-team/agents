@@ -21,7 +21,7 @@ export default async function Home() {
   const ps = paperSummary(marks);
   // Same shape the dashboard card already uses.
   const paper = { start: ps.start, value: ps.value, realized: ps.realized, open: ps.open, winRate: ps.winRate, closed: ps.closed, wins: ps.wins, avgWin: ps.avgWin, avgLoss: ps.avgLoss,
-    positions: ps.positions.map((p) => ({ ticker: p.ticker, qty: p.qty, entry: p.entry_price, window: p.window === "power_hour" ? "Power hour" : "Opening", pnl: p.pnl })),
+    positions: ps.positions.map((p) => ({ ticker: p.ticker, qty: p.qty, entry: p.entry_price, window: p.window === "pre_market" ? "Pre-market" : p.window === "power_hour" ? "Power hour" : "Opening", pnl: p.pnl })),
     byTone: ps.byTone.map((t) => ({ tone: t.key, pnl: t.pnl, trades: t.trades, win: t.win })) };
   return (
     <div className="space-y-4">

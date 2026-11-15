@@ -12,7 +12,7 @@ export interface Signal extends NakshatraSnapshot {
   tf: string;
   bar_time: number;
   bar_close_time: number;
-  window: "opening" | "power_hour" | "midday" | "outside";
+  window: "pre_market" | "opening" | "power_hour" | "midday" | "outside";
   received_at: string;
   status: SignalStatus;
   ut_key: number | null;
