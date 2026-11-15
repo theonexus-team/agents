@@ -20,7 +20,7 @@ export default function SessionTimer({ lastWebhook }: { lastWebhook: string | nu
           <span className={`h-2.5 w-2.5 rounded-full ${recent ? "bg-buy" : "bg-muted/50"}`} title={recent ? "Webhook in the last 10 min" : "Idle"} />
           <div>
             <div className={`text-sm font-semibold ${live ? "text-buy" : "text-muted"}`}>{s.label}</div>
-            <div className="text-[11px] text-muted">{live ? (s.phase === "premarket" ? "Pre-market · alerts live · paper trades on" : "Alerts live") : s.phase === "midday" ? "Alerts muted" : "Monitoring runs 7:00 AM–4:00 PM ET"}</div>
+            <div className="text-[11px] text-muted">{live ? "Trading window 7:00 AM–3:00 PM ET · alerts live · signal-to-signal paper trades" : s.phase === "power" ? "Power hour: signals logged, not traded" : "Trading runs 7:00 AM–3:00 PM ET"}</div>
           </div>
         </div>
         <div className="flex gap-2 text-[11px]">

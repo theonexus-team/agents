@@ -9,52 +9,52 @@ const sig = (ticker: string, side: "BUY" | "SELL", price: number, over: Partial<
   ...({ nak_name: "Rohini", tone: "Calm" } as object), ...over,
 } as Signal);
 
-describe("paper engine (long-only)", () => {
+describe("paper engine (signal to signal, stop-and-reverse)", () => {
   beforeEach(() => resetPaper(1000));
 
-  it("BUY flat opens a long sized at 25% of the account, fractional shares", () => {
+  it("first BUY opens a long sized at 25% of the account, fractional shares", () => {
     expect(applySignal(sig("AAPL", "BUY", 200)).action).toBe("opened");
     const s = paperSummary();
-    expect(s.positions).toHaveLength(1);
-    expect(s.positions[0].qty).toBe(1.25); // $250 / $200
+    expect(s.positions[0]).toMatchObject({ side: "long", qty: 1.25 }); // $250 / $200
     expect(s.cash).toBe(750);
   });
 
-  it("BUY while already long is ignored; SELL flat is ignored", () => {
-    applySignal(sig("AAPL", "BUY", 200));
-    expect(applySignal(sig("AAPL", "BUY", 210)).reason).toBe("already_long");
-    expect(applySignal(sig("TSLA", "SELL", 300)).reason).toBe("flat");
+  it("first SELL opens a short", () => {
+    expect(applySignal(sig("TSLA", "SELL", 250)).action).toBe("opened");
+    expect(paperSummary().positions[0]).toMatchObject({ side: "short", qty: 1 });
   });
 
-  it("SELL closes the long at the signal price and books P&L", () => {
-    applySignal(sig("AAPL", "BUY", 200));
-    expect(applySignal(sig("AAPL", "SELL", 220)).action).toBe("closed");
-    const s = paperSummary();
-    expect(s.positions).toHaveLength(0);
-    expect(s.trades[0].pnl_usd).toBe(25); // 1.25 sh × $20
-    expect(s.trades[0].exit_reason).toBe("opposite_signal");
-    expect(s.value).toBe(1025);
-    expect(s.winRate).toBe(100);
+  it("each signal closes the trade and opens the opposite one", () => {
+    applySignal(sig("AAPL", "BUY", 200));                      // long 1.25 @ 200
+    expect(applySignal(sig("AAPL", "SELL", 220)).action).toBe("reversed"); // close +$25, short @ 220
+    let s = paperSummary();
+    expect(s.trades[0]).toMatchObject({ side: "long", pnl_usd: 25, exit_reason: "opposite_signal" });
+    expect(s.positions[0]).toMatchObject({ side: "short", entry_price: 220 });
+    expect(applySignal(sig("AAPL", "BUY", 210)).action).toBe("reversed"); // short gains $10/sh
+    s = paperSummary();
+    expect(s.trades[0].side).toBe("short");
+    expect(s.trades[0].pnl_usd).toBeGreaterThan(0);
+    expect(s.positions[0].side).toBe("long");
   });
 
-  it("news-blocked or outside-window BUYs never open; SELL exits still go through", () => {
-    expect(applySignal(sig("AAPL", "BUY", 200, { status: "blocked_news" })).action).toBe("ignored");
-    expect(applySignal(sig("AAPL", "BUY", 200, { status: "outside_window" })).action).toBe("ignored");
+  it("a repeat signal in the same direction is ignored", () => {
+    applySignal(sig("AAPL", "BUY", 200));
+    expect(applySignal(sig("AAPL", "BUY", 205)).reason).toBe("already_long");
+  });
+
+  it("news blackout / outside the window: the exit happens, no new entry", () => {
     applySignal(sig("META", "BUY", 500));
     expect(applySignal(sig("META", "SELL", 490, { status: "blocked_news" })).action).toBe("closed");
-  });
-
-  it("window end closes everything at the last price", async () => {
-    applySignal(sig("AAPL", "BUY", 200));
-    applySignal(sig("SPY", "BUY", 500));
-    const closed = await closeAllAtWindowEnd(async (t) => (t === "AAPL" ? 198 : 505));
-    expect(closed.map((t) => t.exit_reason)).toEqual(["window_end", "window_end"]);
     expect(paperSummary().positions).toHaveLength(0);
+    expect(applySignal(sig("SPY", "BUY", 500, { status: "outside_window" })).action).toBe("ignored");
   });
 
-  it("sizes from current equity: 4 positions use ~the whole account, a 5th gets what's left", () => {
-    for (const [t, p] of [["AAPL", 100], ["SPY", 100], ["QQQ", 100], ["MU", 100]] as const) applySignal(sig(t, "BUY", p));
-    expect(paperSummary().cash).toBeCloseTo(0, 1);
-    expect(applySignal(sig("TSLA", "BUY", 100)).reason).toBe("no_cash");
+  it("3:00 PM close settles longs and shorts at the last price", async () => {
+    applySignal(sig("AAPL", "BUY", 200));
+    applySignal(sig("SPY", "SELL", 500));
+    const closed = await closeAllAtWindowEnd(async (t) => (t === "AAPL" ? 198 : 490));
+    expect(closed.map((t) => t.exit_reason)).toEqual(["window_end", "window_end"]);
+    expect(closed.find((t) => t.ticker === "SPY")!.pnl_usd).toBe(5); // short 0.5 sh, +$10
+    expect(paperSummary().positions).toHaveLength(0);
   });
 });

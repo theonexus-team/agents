@@ -5,7 +5,7 @@
  */
 import { SYMBOLS, findSymbol } from "./symbols";
 import { snapshotFor } from "./nakshatra";
-import { windowAt } from "./session";
+import { windowAt, isTradeableWindow } from "./session";
 import { fromZonedTime } from "date-fns-tz";
 import type { Signal, Side } from "./types";
 
@@ -56,7 +56,7 @@ export function sampleSignals(now = Date.now()): Signal[] {
       ticker, side, setup: side === "BUY" ? "UT1" : "UT2", price, tf: "2",
       bar_time: close - 120_000, bar_close_time: close, window: win,
       received_at: new Date(close + 1500).toISOString(),
-      status: !sym.tradeable ? "context_only" : blocked ? "blocked_news" : win === "pre_market" || win === "opening" || win === "power_hour" ? "accepted" : "outside_window",
+      status: !sym.tradeable ? "context_only" : blocked ? "blocked_news" : isTradeableWindow(win) ? "accepted" : "outside_window",
       ut_key: side === "BUY" ? 1 : 2, ut_atr_len: 10, ut_heikin: false, ut_stop: null, atr: null,
       news_state: blocked ? "blackout" : "clear", nearest_event: blocked ? "Fed Chair speech" : null, minutes_to_event: blocked ? 5 : null,
       sample: true,

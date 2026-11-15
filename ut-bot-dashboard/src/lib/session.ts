@@ -28,7 +28,11 @@ const CLOSE = 16 * 60;
 const EARLY_CLOSE = 13 * 60;
 
 export type Phase = "pre" | "premarket" | "opening" | "midday" | "power" | "closed";
-export type TradingWindow = "pre_market" | "opening" | "power_hour" | null;
+export type TradingWindow = "pre_market" | "opening" | "midday" | "power_hour" | null;
+
+/** Paper trades run continuously 7:00 AM–3:00 PM ET (pre-market, opening, midday); power hour is logged only. */
+export const TRADEABLE_WINDOWS = ["pre_market", "opening", "midday"] as const;
+export const isTradeableWindow = (w: string | null | undefined) => !!w && (TRADEABLE_WINDOWS as readonly string[]).includes(w);
 
 export interface SessionState {
   phase: Phase;
@@ -136,17 +140,17 @@ export function getSessionState(now: Date = new Date()): SessionState {
   if (early) {
     if (mins < EARLY_CLOSE) {
       const ms = until(EARLY_CLOSE);
-      return { phase: "midday", window: null, alertsLive: false, earlyClose: true, msLeft: ms, nextOpen, label: `Early close — no power hour (closes 1:00 PM ET, ${fmtDuration(ms)})`, dayProgress };
+      return { phase: "midday", window: "midday", alertsLive: true, earlyClose: true, msLeft: ms, nextOpen, label: `Early close — trading until 1:00 PM ET (${fmtDuration(ms)} left)`, dayProgress };
     }
     return { ...closedState(), label: `Early close — market closed · opens ${formatInTimeZone(nextOpen, NY_TZ, "EEE")} 9:30 AM ET` };
   }
   if (mins < POWER_START) {
     const ms = until(POWER_START);
-    return { phase: "midday", window: null, alertsLive: false, earlyClose: false, msLeft: ms, nextOpen, label: `Midday — power hour in ${fmtDuration(ms)}`, dayProgress };
+    return { phase: "midday", window: "midday", alertsLive: true, earlyClose: false, msLeft: ms, nextOpen, label: `MIDDAY — trading until 3:00 PM (${fmtDuration(ms)} left)`, dayProgress };
   }
   if (mins < CLOSE) {
     const ms = until(CLOSE);
-    return { phase: "power", window: "power_hour", alertsLive: true, earlyClose: false, msLeft: ms, nextOpen, label: `POWER HOUR — ${fmtDuration(ms)} left`, dayProgress };
+    return { phase: "power", window: null, alertsLive: false, earlyClose: false, msLeft: ms, nextOpen, label: `POWER HOUR — not traded (closes in ${fmtDuration(ms)})`, dayProgress };
   }
   return closedState();
 }
@@ -165,11 +169,11 @@ export function windowAt(d: Date): "pre_market" | "opening" | "power_hour" | "mi
   return "outside";
 }
 
-/** Window-end instants (ET) for a given trading day: 9:30 (pre-market end), 11:00 and 16:00 (13:00 on early-close days). */
+/** End of the trading day (ET): 3:00 PM, or 1:00 PM on early-close days. Everything still open closes here. */
 export function windowEnds(d: Date): Date[] {
   if (!isTradingDay(d)) return [];
   const key = nyDateKey(d);
-  return [atNy(key, OPEN), atNy(key, OPENING_END), atNy(key, isEarlyClose(d) ? EARLY_CLOSE : CLOSE)];
+  return [atNy(key, isEarlyClose(d) ? EARLY_CLOSE : POWER_START)];
 }
 
 export function fmtEt(d: Date, pattern = "h:mm a"): string {

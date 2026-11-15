@@ -1,10 +1,11 @@
 //@version=6
-// UT Bot Dual Setup — Webhook Edition (v1.6, Eastern time · pre-market 7:00)
+// UT Bot Dual Setup — Webhook Edition (v1.7, Eastern time · trades 7:00 AM–3:00 PM)
 // Setup 1 → BUY signals. Setup 2 → SELL signals. 2-minute chart. Confirmed bars only (no repaint).
 // All times are New York (ET). Signals show ONLY during monitoring hours, 7:00 AM–4:00 PM ET.
 // Pre-market (7:00–9:30) needs the chart's "Extended trading hours" turned ON, or TradingView has no pre-market bars.
-// Chart: inside the trading windows (pre-market 7:00–9:30, opening 9:30–11:00, power hour 3:00–4:00 ET) labels are solid and alerted;
-//        midday NY signals are faded (context only, never alerted). Nothing outside the session.
+// Chart: inside the trading window (7:00 AM–3:00 PM ET: pre-market, opening, midday) labels are solid and alerted;
+//        power-hour signals (3:00–4:00 PM) are faded (context only, never alerted). Nothing outside 7:00–4:00.
+// The dashboard paper-trades signal to signal: each alert closes the open trade and opens the opposite one.
 // Alerts: ONE TradingView alert per symbol:
 //   Condition: this indicator → "Any alert() function call"
 //   Webhook URL: https://<your-app>/api/webhook/tradingview
@@ -26,13 +27,14 @@ ha2  = input.bool(false, "Use Heikin Ashi source", group = grpS)
 grpW = "Sessions (Eastern time)"
 sessNY     = input.session("0700-1600", "Monitoring hours (ET)", group = grpW)
 useWindows = input.bool(true, "Only ALERT inside trading windows", group = grpW)
-sessPre    = input.session("0700-0930", "Pre-market window (ET)", group = grpW)
+sessTrade  = input.session("0700-1500", "Trading window (ET) — alerts fire here", group = grpW)
+sessPre    = input.session("0700-0930", "Pre-market (ET)", group = grpW)
 sessOpen   = input.session("0930-1100", "Opening window (ET)", group = grpW)
 sessPower  = input.session("1500-1600", "Power hour (ET)", group = grpW)
 shadeWin   = input.bool(true, "Shade windows on chart", group = grpW)
 
 grpV = "Display"
-showOutside = input.bool(true, "Show midday NY signals (faded, no alert)", group = grpV)
+showOutside = input.bool(true, "Show power-hour signals (faded, no alert)", group = grpV)
 showStops   = input.bool(true, "Show trailing stop lines", group = grpV)
 colorBars   = input.bool(false, "Color the signal bar", group = grpV)
 showPanel   = input.bool(true, "Show status panel", group = grpV)
@@ -76,12 +78,14 @@ inNY    = not na(time(timeframe.period, sessNY, "America/New_York"))
 inPre   = inNY and not na(time(timeframe.period, sessPre, "America/New_York"))
 inOpen  = inNY and not na(time(timeframe.period, sessOpen, "America/New_York"))
 inPower = inNY and not na(time(timeframe.period, sessPower, "America/New_York"))
-inWin   = inPre or inOpen or inPower
+inTrade = inNY and not na(time(timeframe.period, sessTrade, "America/New_York"))
+inWin   = inTrade
 tfOk    = not enforce2m or timeframe.period == "2"
 canAlert = inNY and (not useWindows or inWin) and tfOk
 
 windowName = inPre ? "pre_market" : inOpen ? "opening" : inPower ? "power_hour" : "midday"
-fadedWhy   = " | midday, no alert"
+// (power_hour is outside the trading window, so it never alerts)
+fadedWhy   = " | power hour, not traded"
 
 // ───────── JSON payload ─────────
 // Includes the settings that produced the signal, so paper results can be compared by setting later.
@@ -103,7 +107,7 @@ f_json(string side, string setup, float keyV, int atrLen, bool useHa, float stop
      ',"ut_heikin":' + (useHa ? "true" : "false") +
      ',"ut_stop":' + str.tostring(stopLvl, format.mintick) +
      ',"atr":' + str.tostring(atrVal, format.mintick) +
-     ',"source":"tv_ut_dual_v1.6"}'
+     ',"source":"tv_ut_dual_v1.7"}'
 
 if buyRaw and canAlert
     alert(f_json("BUY", "UT1", a1, c1, ha1, stop1, atr1), alert.freq_once_per_bar_close)
@@ -158,7 +162,7 @@ var table panel = table.new(position.top_right, 2, 5, bgcolor = color.new(#0B0F1
 f_t(int t) => na(t) ? "—" : str.format_time(t, "MMM d h:mm a", "America/New_York") + " ET"
 
 if showPanel and barstate.islast
-    winTxt = inPre ? "PRE-MARKET" : inOpen ? "OPENING" : inPower ? "POWER HOUR" : inNY ? "MIDDAY" : "CLOSED"
+    winTxt = inPre ? "PRE-MARKET" : inOpen ? "OPENING" : inTrade ? "MIDDAY" : inPower ? "POWER HOUR (no trades)" : "CLOSED"
     winCol = inWin ? color.new(#16A34A, 0) : color.new(#94A3B8, 0)
     lastSide = na(lastBuyT) and na(lastSellT) ? "—" : na(lastSellT) ? "BUY" : na(lastBuyT) ? "SELL" : lastBuyT > lastSellT ? "BUY" : "SELL"
     sideCol = lastSide == "BUY" ? buyCol : lastSide == "SELL" ? sellCol : color.gray

@@ -1,10 +1,11 @@
+import { isTradeableWindow } from "./session";
 import type { Signal } from "./types";
 
 export type RowStatus = "FRESH" | "WAIT" | "BLOCKED" | "OUT";
 
 export function rowStatus(s: Signal, refNow: number): RowStatus {
   if (s.status === "blocked_news") return "BLOCKED";
-  if (s.window !== "pre_market" && s.window !== "opening" && s.window !== "power_hour") return "OUT";
+  if (!isTradeableWindow(s.window)) return "OUT";
   return refNow - s.bar_close_time <= 2 * 60_000 ? "FRESH" : "WAIT";
 }
 

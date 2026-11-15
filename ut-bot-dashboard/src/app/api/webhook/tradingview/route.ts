@@ -3,7 +3,7 @@ import { applySignal } from "@/lib/paper";
 import { getQuotes } from "@/lib/marketData";
 import { NextResponse, after } from "next/server";
 import { findSymbol } from "@/lib/symbols";
-import { windowAt } from "@/lib/session";
+import { windowAt, isTradeableWindow } from "@/lib/session";
 import { snapshotFor } from "@/lib/nakshatra";
 import { insertSignal } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/connections";
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     bar_close_time: barClose,
     window: win,
     received_at: new Date().toISOString(),
-    status: !sym.tradeable ? "context_only" : win === "pre_market" || win === "opening" || win === "power_hour" ? "accepted" : "outside_window",
+    status: !sym.tradeable ? "context_only" : isTradeableWindow(win) ? "accepted" : "outside_window",
     ut_key: num(body.ut_key),
     ut_atr_len: num(body.ut_atr_len),
     ut_heikin: typeof body.ut_heikin === "boolean" ? body.ut_heikin : null,

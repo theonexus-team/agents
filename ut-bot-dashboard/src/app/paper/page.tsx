@@ -5,7 +5,7 @@ import ResetButton from "./ResetButton";
 
 export const dynamic = "force-dynamic";
 const signed = (n: number) => `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`;
-const winLabel = (w: string) => (w === "power_hour" ? "Power hour" : w === "opening" ? "Opening" : w === "pre_market" ? "Pre-market" : w);
+const winLabel = (w: string) => (w === "power_hour" ? "Power hour" : w === "opening" ? "Opening" : w === "pre_market" ? "Pre-market" : w === "midday" ? "Midday" : w);
 
 export default async function PaperPage() {
   const { quotes } = await getQuotes();
@@ -15,7 +15,7 @@ export default async function PaperPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">Paper trades</h1>
-          <p className="text-[11px] text-muted">Long-only · BUY opens, SELL closes · {P.settings.size_value}% of account per trade, fractional shares · windows: pre-market 7:00–9:30, opening 9:30–11:00, power hour 3:00–4:00 PM ET · auto-close at each window end · fills at the signal price · kept in memory until the database is connected</p>
+          <p className="text-[11px] text-muted">Signal to signal: each BUY/SELL closes the open trade and opens the opposite one · trading 7:00 AM–3:00 PM ET (pre-market, opening, midday) · everything closes at 3:00 PM · {P.settings.size_value}% of account per trade, fractional shares · fills at the signal price · kept in memory until the database is connected</p>
         </div>
         <ResetButton start={P.start} />
       </div>
@@ -28,10 +28,10 @@ export default async function PaperPage() {
 
       <section className="card px-4 py-3">
         <h2 className="font-semibold">Open positions · {P.positions.length}</h2>
-        {!P.positions.length && <p className="mt-2 text-sm text-muted">Flat. The next accepted BUY inside a window opens a position.</p>}
+        {!P.positions.length && <p className="mt-2 text-sm text-muted">Flat. The next signal between 7:00 AM and 3:00 PM opens a position.</p>}
         {P.positions.map((p) => (
           <div key={p.id} className="flex justify-between border-t border-line py-2 text-sm first:border-0">
-            <span><b>{p.ticker}</b> <span className="text-muted">Long {p.qty} sh @ ${p.entry_price.toFixed(2)} · now ${p.mark.toFixed(2)} · {winLabel(p.window)}</span></span>
+            <span><b>{p.ticker}</b> <span className="text-muted">{p.side === "long" ? "Long" : "Short"} {p.qty} sh @ ${p.entry_price.toFixed(2)} · now ${p.mark.toFixed(2)} · {winLabel(p.window)}</span></span>
             <span className={`num ${p.pnl >= 0 ? "text-buy" : "text-sell"}`}>{signed(p.pnl)}</span>
           </div>
         ))}
@@ -59,12 +59,13 @@ export default async function PaperPage() {
       <section className="card overflow-x-auto">
         <h2 className="px-4 pt-3 font-semibold">Closed trades · {P.trades.length}</h2>
         <table className="mt-2 w-full min-w-[760px] text-left text-sm">
-          <thead className="label"><tr>{["Closed (ET)", "Symbol", "Qty", "Entry", "Exit", "P&L", "%", "Reason", "Window", "Nakshatra"].map((h) => <th key={h} className="py-2 pl-4 font-normal">{h}</th>)}</tr></thead>
+          <thead className="label"><tr>{["Closed (ET)", "Symbol", "Side", "Qty", "Entry", "Exit", "P&L", "%", "Reason", "Window", "Nakshatra"].map((h) => <th key={h} className="py-2 pl-4 font-normal">{h}</th>)}</tr></thead>
           <tbody>
             {P.trades.map((t) => (
               <tr key={t.id} className="border-t border-line">
                 <td className="num py-2 pl-4 text-xs">{fmtEt(new Date(t.closed_at), "MMM d h:mm a")}</td>
                 <td className="pl-4 font-semibold">{t.ticker}</td>
+                <td className={`pl-4 text-xs ${t.side === "long" ? "text-buy" : "text-sell"}`}>{t.side}</td>
                 <td className="num pl-4">{t.qty}</td>
                 <td className="num pl-4">${t.entry_price.toFixed(2)}</td>
                 <td className="num pl-4">${t.exit_price.toFixed(2)}</td>

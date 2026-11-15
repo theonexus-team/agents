@@ -9,7 +9,8 @@ describe("session", () => {
     expect(getSessionState(et("2026-07-15T09:00:00-04:00")).phase).toBe("premarket");
     expect(getSessionState(et("2026-07-15T09:30:00-04:00")).phase).toBe("opening");
     expect(getSessionState(et("2026-07-15T12:00:00-04:00")).phase).toBe("midday");
-    expect(getSessionState(et("2026-07-15T15:38:00-04:00")).label).toBe("POWER HOUR — 22m left");
+    expect(getSessionState(et("2026-07-15T15:38:00-04:00")).label).toBe("POWER HOUR — not traded (closes in 22m)");
+    expect(getSessionState(et("2026-07-15T12:00:00-04:00")).alertsLive).toBe(true); // midday is traded now
     expect(getSessionState(et("2026-07-15T16:00:00-04:00")).phase).toBe("closed");
   });
 
@@ -20,7 +21,7 @@ describe("session", () => {
     expect(getSessionState(et("2026-11-16T08:18:00-05:00")).label).toBe("PRE-MARKET — NY opens in 1h 12m");
     expect(getSessionState(et("2026-11-16T08:18:00-05:00")).window).toBe("pre_market");
     expect(getSessionState(et("2026-11-16T06:50:00-05:00")).label).toBe("Pre-market monitoring starts 7:00 AM ET (in 10m)");
-    expect(getSessionState(et("2026-11-16T12:56:00-05:00")).label).toBe("Midday — power hour in 2h 4m");
+    expect(getSessionState(et("2026-11-16T12:56:00-05:00")).label).toBe("MIDDAY — trading until 3:00 PM (2h 4m left)");
   });
 
   it("DST change days", () => {
@@ -41,9 +42,10 @@ describe("session", () => {
 
   it("early close: no power hour, window ends at 1:00 PM", () => {
     const d = et("2026-11-27T12:00:00-05:00");
-    expect(getSessionState(d).label).toMatch(/^Early close — no power hour/);
+    expect(getSessionState(d).label).toMatch(/^Early close — trading until 1:00 PM/);
     expect(windowAt(et("2026-11-27T15:30:00-05:00"))).toBe("outside");
-    expect(windowEnds(d).map((x) => x.toISOString())).toEqual(["2026-11-27T14:30:00.000Z", "2026-11-27T16:00:00.000Z", "2026-11-27T18:00:00.000Z"]);
+    expect(windowEnds(d).map((x) => x.toISOString())).toEqual(["2026-11-27T18:00:00.000Z"]); // 1:00 PM ET
+    expect(windowEnds(et("2026-11-16T12:00:00-05:00")).map((x) => x.toISOString())).toEqual(["2026-11-16T20:00:00.000Z"]); // 3:00 PM ET
   });
 
   it("windows include the boundary bar close", () => {
