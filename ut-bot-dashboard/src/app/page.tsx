@@ -2,7 +2,7 @@ import Dashboard from "@/components/Dashboard";
 import SessionTimer from "@/components/SessionTimer";
 import { SYMBOLS } from "@/lib/symbols";
 import { NAKSHATRAS, NAKSHATRA_TABLE_IS_PLACEHOLDER, moonNakshatra } from "@/lib/nakshatra";
-import { sampleSignals, sampleClock, SAMPLE_ECON } from "@/lib/sample";
+import { SAMPLE_ECON } from "@/lib/sample";
 import { getQuotes, getBars } from "@/lib/marketData";
 import { todaysEvents } from "@/lib/econCalendar";
 import { paperSummary } from "@/lib/paper";
@@ -12,9 +12,10 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const real = listSignals();
-  const sampleMode = real.length === 0;
-  const refNow = sampleMode ? sampleClock().getTime() : Date.now();
-  const signals = sampleMode ? sampleSignals(refNow) : real;
+  // Live: real signals only (no sample rows). Until the first alert, every symbol sits under "No signal yet" with its live price.
+  const sampleMode = false;
+  const refNow = Date.now();
+  const signals = real;
   const [{ quotes }, econ, ...barSets] = await Promise.all([getQuotes(), todaysEvents(), ...["QQQ", "SMH"].map((t) => getBars(t))]);
   const bars = Object.fromEntries(["QQQ", "SMH"].map((t, i) => [t, barSets[i].bars.slice(-60).map((b) => b.close)]));
   const marks = Object.fromEntries(quotes.map((q) => [q.ticker, q.price]));

@@ -1,18 +1,17 @@
 import { listSignals } from "@/lib/store";
-import { sampleSignals, sampleClock } from "@/lib/sample";
 import { fmtEt } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default function SignalsPage() {
   const real = listSignals();
-  const rows = real.length ? real : sampleSignals(sampleClock().getTime());
+  const rows = real;
   return (
     <section className="card overflow-x-auto">
       <div className="flex items-center justify-between px-4 pt-3">
         <div>
           <h1 className="font-semibold">Signal log</h1>
-          <p className="text-[11px] text-muted">{real.length ? "Webhooks received since the server started (in-memory until Supabase is connected)" : "Sample rows — no webhooks received yet"} · filters + CSV export come with Supabase</p>
+          <p className="text-[11px] text-muted">{real.length ? "Webhooks received since the server started (in-memory until Supabase is connected)" : "No signals yet. They appear here as TradingView alerts arrive (7:00 AM–4:00 PM ET)."} · filters + CSV export come with Supabase</p>
         </div>
       </div>
       <table className="mt-2 w-full min-w-[900px] text-left text-sm">
