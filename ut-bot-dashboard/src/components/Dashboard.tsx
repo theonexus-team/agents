@@ -117,8 +117,8 @@ export default function Dashboard(p: Props) {
         </div>
       </section>
 
-      <SignalTable title="ETFs & market context" rows={etfs} latest={latest} refNow={p.refNow} move={move} selected={selected} onSelect={setSelected} />
-      <SignalTable title={`Stocks · watchlist (${stocks.length})`} rows={stocks} latest={latest} refNow={p.refNow} move={move} selected={selected} onSelect={setSelected} refStocks={refStocks} />
+      <SignalTable title="ETFs & market context" rows={etfs} quote={quote} latest={latest} refNow={p.refNow} move={move} selected={selected} onSelect={setSelected} />
+      <SignalTable title={`Stocks · watchlist (${stocks.length})`} rows={stocks} quote={quote} latest={latest} refNow={p.refNow} move={move} selected={selected} onSelect={setSelected} refStocks={refStocks} />
 
       {/* Bottom row */}
       <section className="grid gap-4 lg:grid-cols-3">
@@ -185,8 +185,8 @@ const STATUS_STYLE: Record<RowStatus, [string, string]> = {
   OUT: ["OUT OF WINDOW", "bg-panel-2 text-muted"],
 };
 
-function SignalTable({ title, rows, latest, refNow, move, selected, onSelect, refStocks }: {
-  title: string; rows: WatchSymbol[]; latest: Map<string, Signal>; refNow: number;
+function SignalTable({ title, rows, quote, latest, refNow, move, selected, onSelect, refStocks }: {
+  title: string; rows: WatchSymbol[]; quote: (t: string) => Quote | undefined; latest: Map<string, Signal>; refNow: number;
   move: (s: Signal) => { d: number; pct: number; withSignal: boolean } | null;
   selected: string | null; onSelect: (t: string) => void; refStocks?: string[];
 }) {
@@ -206,6 +206,7 @@ function SignalTable({ title, rows, latest, refNow, move, selected, onSelect, re
         <td><SideBadge side={s.side} /></td>
         <td className="num text-xs text-muted">{et(s.bar_close_time)} · {ageLabel(s, refNow)}</td>
         <td className="num">{usd(s.price)}</td>
+        <td className="num">{(() => { const q = quote(r.ticker); return q ? <>{usd(q.price)} <span className={`text-[11px] ${q.changePct >= 0 ? "text-buy" : "text-sell"}`}>{q.changePct >= 0 ? "+" : ""}{q.changePct.toFixed(2)}%</span></> : "—"; })()}</td>
         <td className={`num text-xs ${m ? (m.withSignal ? "text-buy" : "text-sell") : "text-muted"}`}>{m ? `${signed(m.d)} / ${signed(m.pct)}%` : "—"}</td>
         <td><span className={`rounded px-2 py-0.5 text-[11px] ${cls}`}>{st === "BLOCKED" && s.nearest_event ? `BLOCKED · News (${s.nearest_event})` : label}</span></td>
         {refStocks && <td className="pr-4 text-right text-xs">{refStocks.includes(r.ticker) ? <span className="rounded bg-wait/15 px-2 py-0.5 text-wait">★ Reference match</span> : <span className="text-muted">—</span>}</td>}
@@ -226,12 +227,12 @@ function SignalTable({ title, rows, latest, refNow, move, selected, onSelect, re
       </div>
       <table className="mt-2 w-full min-w-[720px] text-left text-sm">
         <thead className="label">
-          <tr><th className="py-2 pl-4 font-normal">Symbol</th><th className="font-normal">Latest UT</th><th className="font-normal">Time / age</th><th className="font-normal">Signal price</th><th className="font-normal">Move since signal</th><th className="font-normal">Entry status</th>{refStocks && <th className="pr-4 text-right font-normal">Reference</th>}</tr>
+          <tr><th className="py-2 pl-4 font-normal">Symbol</th><th className="font-normal">Latest UT</th><th className="font-normal">Time / age</th><th className="font-normal">Signal price</th><th className="font-normal">Last price</th><th className="font-normal">Move since signal</th><th className="font-normal">Entry status</th>{refStocks && <th className="pr-4 text-right font-normal">Reference</th>}</tr>
         </thead>
         <tbody>
-          {fresh.length > 0 && <tr><td colSpan={7} className="px-4 pt-3 pb-1 text-xs font-semibold tracking-wider text-buy">FRESH BUY / SELL</td></tr>}
+          {fresh.length > 0 && <tr><td colSpan={8} className="px-4 pt-3 pb-1 text-xs font-semibold tracking-wider text-buy">FRESH BUY / SELL</td></tr>}
           {fresh.map((x) => <Row key={x.r.ticker} {...x} />)}
-          {rest.length > 0 && <tr><td colSpan={7} className="px-4 pt-3 pb-1 text-xs font-semibold tracking-wider text-wait">WAIT · PREVIOUS SIGNALS, NEWEST FIRST</td></tr>}
+          {rest.length > 0 && <tr><td colSpan={8} className="px-4 pt-3 pb-1 text-xs font-semibold tracking-wider text-wait">WAIT · PREVIOUS SIGNALS, NEWEST FIRST</td></tr>}
           {rest.map((x) => <Row key={x.r.ticker} {...x} />)}
         </tbody>
       </table>
@@ -239,7 +240,10 @@ function SignalTable({ title, rows, latest, refNow, move, selected, onSelect, re
         <div className="px-4 pb-3">
           <div className="pt-3 pb-2 text-xs font-semibold tracking-wider text-muted">NO SIGNAL YET</div>
           <div className="flex flex-wrap gap-2">
-            {none.map((r) => <span key={r.ticker} className="rounded-md border border-dashed border-line px-3 py-1.5 text-[11px] text-muted">{r.placeholder ? `[${r.ticker}] · add to watchlist` : r.ticker}</span>)}
+            {none.map((r) => { const q = quote(r.ticker); return (
+              <span key={r.ticker} className="rounded-md border border-dashed border-line px-3 py-1.5 text-[11px] text-muted">
+                <b className="text-text">{r.ticker}</b>{q && <> · <span className="num">{usd(q.price)}</span> <span className={q.changePct >= 0 ? "text-buy" : "text-sell"}>{q.changePct >= 0 ? "+" : ""}{q.changePct.toFixed(2)}%</span></>}
+              </span>); })}
           </div>
         </div>
       )}
