@@ -1,9 +1,10 @@
-import { listSignals } from "@/lib/store";
+import { listSignals, syncState } from "@/lib/store";
 import { fmtEt } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default function SignalsPage() {
+export default async function SignalsPage() {
+  await syncState();
   const real = listSignals();
   const rows = real;
   return (

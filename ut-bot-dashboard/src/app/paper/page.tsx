@@ -1,3 +1,4 @@
+import { syncState } from "@/lib/store";
 import { paperSummary } from "@/lib/paper";
 import { getQuotes } from "@/lib/marketData";
 import { fmtEt } from "@/lib/session";
@@ -8,6 +9,7 @@ const signed = (n: number) => `${n >= 0 ? "+" : "-"}$${Math.abs(n).toFixed(2)}`;
 const winLabel = (w: string) => (w === "power_hour" ? "Power hour" : w === "opening" ? "Opening" : w === "pre_market" ? "Pre-market" : w === "midday" ? "Midday" : w);
 
 export default async function PaperPage() {
+  await syncState();
   const { quotes } = await getQuotes();
   const P = paperSummary(Object.fromEntries(quotes.map((q) => [q.ticker, q.price])));
   return (

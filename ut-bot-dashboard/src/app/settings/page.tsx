@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
 import { SYMBOLS } from "@/lib/symbols";
-import { lastWebhookAt } from "@/lib/store";
+import { lastWebhookAt, syncState } from "@/lib/store";
 import { DEFAULT_RISK, riskLevels } from "@/lib/risk";
 
 const ex = riskLevels(0.8);
@@ -8,6 +8,7 @@ const ex = riskLevels(0.8);
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  await syncState();
   const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "http";

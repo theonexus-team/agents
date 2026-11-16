@@ -6,11 +6,12 @@ import { SAMPLE_ECON } from "@/lib/sample";
 import { getQuotes, getBars } from "@/lib/marketData";
 import { todaysEvents } from "@/lib/econCalendar";
 import { paperSummary } from "@/lib/paper";
-import { listSignals, lastWebhookAt } from "@/lib/store";
+import { listSignals, lastWebhookAt, syncState } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await syncState();
   const real = listSignals();
   // Live: real signals only (no sample rows). Until the first alert, every symbol sits under "No signal yet" with its live price.
   const sampleMode = false;

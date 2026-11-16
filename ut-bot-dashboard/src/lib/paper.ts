@@ -23,8 +23,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const r4 = (n: number) => Math.round(n * 10_000) / 10_000;
 
 export const getPaper = () => st();
-export function resetPaper(startingBalance?: number) {
-  g.__utPaper = fresh({ ...st().settings, ...(startingBalance ? { starting_balance: startingBalance } : {}) });
+export function resetPaper(startingBalance?: number, fromDefaults = false) {
+  const base = fromDefaults ? DEFAULT_SETTINGS : st().settings;
+  g.__utPaper = fresh({ ...base, ...(startingBalance ? { starting_balance: startingBalance } : {}) });
   return st();
 }
 
@@ -64,11 +65,11 @@ export function applySignal(sig: Signal, marks: Record<string, number> = {}): { 
 }
 
 /** Window end: close everything at the last price. */
-export async function closeAllAtWindowEnd(priceOf: (ticker: string) => Promise<number | null>) {
+export async function closeAllAtWindowEnd(priceOf: (ticker: string) => Promise<number | null>, at = new Date()) {
   const s = st();
   if (!s.settings.auto_close_at_window_end) return [];
   const out: Trade[] = [];
-  for (const p of [...s.positions]) out.push(close(p, (await priceOf(p.ticker)) ?? p.entry_price, "window_end", null));
+  for (const p of [...s.positions]) out.push(close(p, (await priceOf(p.ticker)) ?? p.entry_price, "window_end", null, at));
   return out;
 }
 

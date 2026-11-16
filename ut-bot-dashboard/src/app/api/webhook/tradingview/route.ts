@@ -1,12 +1,10 @@
 import { newsStateAt } from "@/lib/econCalendar";
-import { applySignal } from "@/lib/paper";
 import { getQuotes } from "@/lib/marketData";
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
 import { findSymbol } from "@/lib/symbols";
 import { windowAt, isTradeableWindow } from "@/lib/session";
 import { snapshotFor } from "@/lib/nakshatra";
-import { insertSignal } from "@/lib/store";
-import { isSupabaseConfigured } from "@/lib/connections";
+import { appendEvent } from "@/lib/store";
 import type { Signal } from "@/lib/types";
 
 const TV_IPS = ["52.89.214.238", "34.212.75.30", "54.218.53.128", "52.32.178.7"];
@@ -68,22 +66,14 @@ export async function POST(req: Request) {
     ...snapshotFor(new Date(barClose), sym.ticker, sym.sector),
   };
 
-  if (signal.status === "accepted" && signal.side === "BUY" && signal.news_state === "blackout") signal.status = "blocked_news";
+  // Stop-and-reverse: in a blackout the exit still happens, the new entry (either side) is skipped.
+  if (signal.status === "accepted" && signal.news_state === "blackout") signal.status = "blocked_news";
 
-  // 5–6. De-duplicate + insert. (In-memory until Supabase is connected.)
-  const inserted = insertSignal(signal);
+  // 5–6. De-duplicate + store durably (Vercel Blob). Paper trades are rebuilt from the stored signals,
+  // using the live prices captured here for position sizing.
+  const { quotes } = await getQuotes();
+  const inserted = await appendEvent({ kind: "signal", at: Date.now(), signal, marks: Object.fromEntries(quotes.map((q) => [q.ticker, q.price])) });
   if (!inserted) return NextResponse.json({ ok: true, duplicate: true });
-
-  after(async () => {
-    // Paper engine: BUYs only when accepted; SELLs always close an open long (exits never blocked).
-    if (sym.tradeable) {
-      const { quotes } = await getQuotes();
-      applySignal(signal, Object.fromEntries(quotes.map((q) => [q.ticker, q.price])));
-    }
-    // TODO(push): sendPush() for signals inside a window, write alerts_log.
-    // TODO(supabase): persist when isSupabaseConfigured().
-    void isSupabaseConfigured;
-  });
 
   return NextResponse.json({ ok: true, id: signal.id, window: win, status: signal.status, nakshatra: signal.nak_name });
 }
